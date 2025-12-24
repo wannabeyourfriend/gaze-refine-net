@@ -11,9 +11,14 @@ from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtCore import QUrl
 from eye_tracker_stream import EyeTrackerStream
 # 把 project_root 加入模块搜索路径
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT))
-from post_processing.gaze_calibration_runtime import SimRBFCalibrator
+APP_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MODEL_CALIB_ROOT = REPO_ROOT / "apps" / "model-calibration"
+NEURAL_REFINE_ROOT = REPO_ROOT / "apps" / "neural-refine"
+for p in [APP_ROOT, REPO_ROOT, MODEL_CALIB_ROOT, NEURAL_REFINE_ROOT]:
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+from post_processing.gaze_calibration_runtime import SimRBFWithNeuralCascadeCalibrator
 
 # ---------------- CONFIG ----------------
 CIRCLE_RADIUS = 50
@@ -655,11 +660,16 @@ def redirect_stdout_to_file():
 def run_music_ui(log_dir: Path, origin_dir: Path):
     from datetime import datetime
     origin_csv = origin_dir / "grid_gaze_log.csv"
-    calibrator = SimRBFCalibrator(
-            origin_csv_path=origin_csv,
-            rbf_kernel="multiquadric",
-            smooth=1.0
-        )
+    checkpoint_path = REPO_ROOT / "checkpoints" / "epoch_0100.pt"
+    cascade_cfg = REPO_ROOT / "apps" / "neural-refine" / "config" / "cascade.yaml"
+    calibrator = SimRBFWithNeuralCascadeCalibrator(
+        origin_csv_path=origin_csv,
+        checkpoint_path=checkpoint_path,
+        config_path=cascade_cfg,
+        device="cpu",
+        rbf_kernel="multiquadric",
+        smooth=1.0,
+    )
     log_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_dir / f"music_{timestamp}.log"
