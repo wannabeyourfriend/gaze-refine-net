@@ -8,7 +8,7 @@ model:
 
 training:
   batch_size: 128
-  num_epochs: 100
+  num_epochs: 110
   learning_rate: 1e-4
   optimizer: "adamw"
   weight_decay: 1e-3
@@ -20,7 +20,7 @@ training:
 loss:
   mse_weight: 1.0
   euclidean_weight: 1.0
-  regularization_weight: 1e-3
+  regularization_weight: 0.0001
 
 data:
   train_data_path: "../../data/prepared/split_avg_data/train.csv"
@@ -39,6 +39,6 @@ experiment:
   device: "cpu"
 
 evaluation:
-  save_predictions: false
+  save_predictions: true
   visualize: false
   output_dir: "../../outputs"
