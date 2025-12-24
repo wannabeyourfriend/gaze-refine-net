@@ -1,3 +1,5 @@
+
+## Jaiqi Work Notes
 Notes:
 - The 7th version is the latest. CSV outputs for origin+test now contain only origin and target gaze data; poly and RBF data are removed and handled in later processing.
 - `calibration_model_full_compare` performs first-stage per-file post-processing: fit a model using a session's origin data and evaluate with test data for comparison.
@@ -30,3 +32,16 @@ Status checklist:
 - Fixation scoring and other quantitative metrics √
 - Fusion with calibration to threshold decisions on processed data √
 - Manual TXT alignment fixes √
+
+
+
+## Zixuan Work notes
+
+```bash
+# initial gaze error
+python scripts/eval.py original data/prepared/split_avg_data/test.csv
+# sim rbf
+python scipts/eval.py sim_rbf data/prepared/split_avg_data/test.csv
+# refine
+python scripts/eval.py pred_gaze outputs/predictions_test.csv
+```
