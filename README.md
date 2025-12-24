@@ -1,5 +1,5 @@
 
-## Jaiqi Work Notes
+## Jiaqi Work Notes
 Notes:
 - The 7th version is the latest. CSV outputs for origin+test now contain only origin and target gaze data; poly and RBF data are removed and handled in later processing.
 - `calibration_model_full_compare` performs first-stage per-file post-processing: fit a model using a session's origin data and evaluate with test data for comparison.
