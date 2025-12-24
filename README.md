@@ -53,7 +53,7 @@ cd project-root
 # initial gaze error
 python scripts/eval.py original data/prepared/split_avg_data/test.csv
 # sim rbf
-python scipts/eval.py sim_rbf data/prepared/split_avg_data/test.csv
+python scripts/eval.py sim_rbf data/prepared/split_avg_data/test.csv
 # refine
 python scripts/eval.py pred_gaze outputs/predictions_test.csv
 ```
