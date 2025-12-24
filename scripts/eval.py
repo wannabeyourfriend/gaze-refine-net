@@ -1,22 +1,3 @@
-#!/usr/bin/env python3
-"""
-Gaze Prediction Evaluation Script
-
-Calculate average error distance between target points and predicted gaze points.
-
-Usage:
-    python evaluate_gaze.py <method> <data_file>
-    
-Arguments:
-    method: "original", "sim_rbf", or "pred_gaze"
-    data_file: path to CSV file with gaze data
-
-Examples:
-    python evaluate_gaze.py original data.csv
-    python evaluate_gaze.py sim_rbf data.csv
-    python evaluate_gaze.py pred_gaze data.csv
-"""
-
 import sys
 import csv
 import math

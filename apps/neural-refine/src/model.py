@@ -42,16 +42,18 @@ class GazeDataset(Dataset):
     """
     PyTorch Dataset for gaze calibration examples stored in CSV form.
 
-    Expected columns:
-        - target_x, target_y: ground-truth gaze coordinates.
-        - original_gaze_x, original_gaze_y: uncalibrated gaze estimate.
+    Modes:
+        - end_to_end: inputs are (original_gaze_x, original_gaze_y);
+          targets are residuals target - original.
+        - cascade: inputs are (original_gaze_x, original_gaze_y,
+          sim_rbf_gaze_x, sim_rbf_gaze_y); targets are residuals
+          target - sim_rbf.
 
-    The Dataset converts the targets into residuals (target - original)
-    and optionally normalizes both inputs and residuals by
-    ``coordinate_scale`` so the numbers stay small during training.
+    All coordinates can optionally be normalized by ``coordinate_scale`` to
+    keep values small during optimization.
     """
 
-    required_columns = [
+    required_columns_base = [
         "target_x",
         "target_y",
         "original_gaze_x",
@@ -63,24 +65,42 @@ class GazeDataset(Dataset):
         csv_path: str | Path,
         coordinate_scale: float = 100.0,
         normalize: bool = True,
+        model_type: str = "end_to_end",
     ) -> None:
         super().__init__()
+        if model_type not in {"end_to_end", "cascade"}:
+            raise ValueError(f"Unsupported model_type: {model_type}")
+        self.model_type = model_type
         path = Path(csv_path)
         if not path.exists():
             raise FileNotFoundError(f"CSV path does not exist: {path}")
 
         df = pd.read_csv(path)
-        missing = [c for c in self.required_columns if c not in df.columns]
+        required_columns = list(self.required_columns_base)
+        if model_type == "cascade":
+            required_columns.extend(["sim_rbf_gaze_x", "sim_rbf_gaze_y"])
+        missing = [c for c in required_columns if c not in df.columns]
         if missing:
             raise ValueError(f"Missing required columns in {path}: {missing}")
 
-        inputs_px = df[["original_gaze_x", "original_gaze_y"]].to_numpy(
+        targets_px = df[["target_x", "target_y"]].to_numpy(dtype=np.float32)
+        orig_px = df[["original_gaze_x", "original_gaze_y"]].to_numpy(
             dtype=np.float32
         )
-        targets_px = df[["target_x", "target_y"]].to_numpy(dtype=np.float32)
-        residuals_px = targets_px - inputs_px
+
+        if model_type == "cascade":
+            sim_px = df[["sim_rbf_gaze_x", "sim_rbf_gaze_y"]].to_numpy(
+                dtype=np.float32
+            )
+            inputs_px = np.concatenate([orig_px, sim_px], axis=1)
+            residuals_px = targets_px - sim_px
+            self.sim_inputs_px = torch.from_numpy(sim_px)
+        else:
+            inputs_px = orig_px
+            residuals_px = targets_px - orig_px
 
         # Store pixel-space copies for later exports / metrics.
+        self.orig_inputs_px = torch.from_numpy(orig_px)
         self.inputs_px = torch.from_numpy(inputs_px)
         self.targets_px = torch.from_numpy(targets_px)
         self.residuals_px = torch.from_numpy(residuals_px)
@@ -175,11 +195,15 @@ def build_model(cfg: dict) -> GazeRefineNet:
         coordinate_scale=cfg.get("coordinate_scale", 100.0),
     )
 
-    if model_cfg.input_dim != 2:
-        # The dataset supplies 2-D coordinates; expose a clear error to the
-        # caller instead of silently constructing a wrong model.
+    supported_types = {"end_to_end", "cascade"}
+    if model_cfg.type not in supported_types:
+        raise ValueError(f"Unsupported model type: {model_cfg.type}")
+
+    expected_input_dim = 4 if model_cfg.type == "cascade" else 2
+    if model_cfg.input_dim != expected_input_dim:
         raise ValueError(
-            f"Only 2-D inputs are currently supported, got {model_cfg.input_dim}"
+            f"{model_cfg.type} expects input_dim={expected_input_dim}, "
+            f"got {model_cfg.input_dim}"
         )
 
     return GazeRefineNet(
