@@ -39,7 +39,9 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def build_dataloaders(cfg: dict, coordinate_scale: float) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def build_dataloaders(
+    cfg: dict, model_type: str, coordinate_scale: float
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
     base = Path(__file__).resolve().parent
     data_cfg = cfg["data"]
 
@@ -47,16 +49,19 @@ def build_dataloaders(cfg: dict, coordinate_scale: float) -> Tuple[DataLoader, D
         resolve_path(base, data_cfg["train_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
+        model_type=model_type,
     )
     val_ds = GazeDataset(
         resolve_path(base, data_cfg["val_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
+        model_type=model_type,
     )
     test_ds = GazeDataset(
         resolve_path(base, data_cfg["test_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
+        model_type=model_type,
     )
 
     return (
@@ -236,6 +241,7 @@ def export_predictions(
     rows = []
 
     scale = coordinate_scale if getattr(dataset, "normalize", True) else 1.0
+    base_inputs_px = getattr(dataset, "sim_inputs_px", dataset.orig_inputs_px)
 
     offset = 0
     for inputs, _ in loader:
@@ -247,10 +253,12 @@ def export_predictions(
 
         for i in range(bsz):
             idx = offset + i
-            orig_px = dataset.inputs_px[idx]
+            orig_px = dataset.orig_inputs_px[idx]
+            sim_px = getattr(dataset, "sim_inputs_px", None)
+            base_px = base_inputs_px[idx]
             target_px = dataset.targets_px[idx]
             pred_res_px = preds_px[i].cpu()
-            pred_gaze_px = orig_px + pred_res_px
+            pred_gaze_px = base_px + pred_res_px
 
             rows.append(
                 {
@@ -258,6 +266,12 @@ def export_predictions(
                     "target_y": float(target_px[1]),
                     "original_gaze_x": float(orig_px[0]),
                     "original_gaze_y": float(orig_px[1]),
+                    "sim_rbf_gaze_x": float(sim_px[idx][0])
+                    if sim_px is not None
+                    else None,
+                    "sim_rbf_gaze_y": float(sim_px[idx][1])
+                    if sim_px is not None
+                    else None,
                     "pred_res_x": float(pred_res_px[0]),
                     "pred_res_y": float(pred_res_px[1]),
                     "pred_gaze_x": float(pred_gaze_px[0]),
@@ -333,8 +347,11 @@ def main() -> None:
     device_str = args.device or cfg.get("experiment", {}).get("device", "cpu")
     device = torch.device(device_str)
 
+    model_type = cfg["model"].get("type", "end_to_end")
     coordinate_scale = cfg["model"].get("coordinate_scale", 100.0)
-    train_loader, val_loader, test_loader = build_dataloaders(cfg, coordinate_scale)
+    train_loader, val_loader, test_loader = build_dataloaders(
+        cfg, model_type, coordinate_scale
+    )
 
     model = build_model(cfg["model"]).to(device)
     optimizer = build_optimizer(model, cfg)

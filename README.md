@@ -36,8 +36,20 @@ Status checklist:
 
 
 ## Zixuan Work notes
-
+train
 ```bash
+cd apps/neural-refine
+source .venv/bin/activate
+
+# train from sim_rbf
+python main.py  --config config/cascade.yaml
+# train from original
+python main.py --checkpoint ../../checkpoints/epoch_0100.pt --config config/default.yaml
+```
+
+evaluation
+```bash
+cd project-root
 # initial gaze error
 python scripts/eval.py original data/prepared/split_avg_data/test.csv
 # sim rbf
