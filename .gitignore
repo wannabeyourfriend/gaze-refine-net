@@ -209,3 +209,5 @@ __marimo__/
 .env
 
 wandb
+
+.DS_Store
