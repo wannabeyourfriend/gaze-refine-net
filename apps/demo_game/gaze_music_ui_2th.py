@@ -14,11 +14,11 @@ from eye_tracker_stream import EyeTrackerStream
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODEL_CALIB_ROOT = REPO_ROOT / "apps" / "model-calibration"
-NEURAL_REFINE_ROOT = REPO_ROOT / "apps" / "neural-refine"
+NEURAL_REFINE_ROOT = REPO_ROOT / "apps" / "neural_refine"
 for p in [APP_ROOT, REPO_ROOT, MODEL_CALIB_ROOT, NEURAL_REFINE_ROOT]:
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
-from post_processing.gaze_calibration_runtime import SimRBFWithNeuralCascadeCalibrator
+from model_calibration.post_processing.gaze_calibration_runtime import SimRBFWithNeuralCascadeCalibrator, SimRBFCalibrator, PolynomialCalibrator
 
 # ---------------- CONFIG ----------------
 CIRCLE_RADIUS = 50
@@ -657,11 +657,11 @@ def redirect_stdout_to_file():
     print(f"Log file: {log_file.resolve()}")
     return log_fp
 
-def run_music_ui(log_dir: Path, origin_dir: Path):
+def run_music_ui_refined(log_dir: Path, origin_dir: Path):
     from datetime import datetime
     origin_csv = origin_dir / "grid_gaze_log.csv"
     checkpoint_path = REPO_ROOT / "checkpoints" / "epoch_0100.pt"
-    cascade_cfg = REPO_ROOT / "apps" / "neural-refine" / "config" / "cascade.yaml"
+    cascade_cfg = REPO_ROOT / "apps" / "neural_refine" / "config" / "cascade.yaml"
     calibrator = SimRBFWithNeuralCascadeCalibrator(
         origin_csv_path=origin_csv,
         checkpoint_path=checkpoint_path,
@@ -689,6 +689,55 @@ def run_music_ui(log_dir: Path, origin_dir: Path):
     log_fp.close()
     sys.exit(exit_code)
 
+def run_music_ui_poly(log_dir: Path, origin_dir: Path):
+    from datetime import datetime
+    origin_csv = origin_dir / "grid_gaze_log.csv"
+    calibrator_poly = PolynomialCalibrator(origin_csv_path=origin_csv)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = log_dir / f"music_{timestamp}.log"
+
+    log_fp = open(log_file, "w", encoding="utf-8")
+    sys.stdout = log_fp
+    sys.stderr = log_fp
+
+    app = QApplication(sys.argv)
+    w = GazePianoUI(
+        audio_file="Dance_Of_the_Golden_Snake_1.5x.wav",
+        pitches_file="Dance_Of_the_Golden_Snake_pitches_1.5x.txt",
+        calibrator = calibrator_poly
+    )
+    exit_code = app.exec()
+
+    log_fp.close()
+    sys.exit(exit_code)
+
+def run_music_ui_simrbf(log_dir: Path, origin_dir: Path):
+    from datetime import datetime
+    origin_csv = origin_dir / "grid_gaze_log.csv"
+    calibrator_simrbf = SimRBFCalibrator(
+            origin_csv_path=origin_csv,
+            rbf_kernel="multiquadric",
+            smooth=1.0
+        )
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = log_dir / f"music_{timestamp}.log"
+
+    log_fp = open(log_file, "w", encoding="utf-8")
+    sys.stdout = log_fp
+    sys.stderr = log_fp
+
+    app = QApplication(sys.argv)
+    w = GazePianoUI(
+        audio_file="Dance_Of_the_Golden_Snake_1.5x.wav",
+        pitches_file="Dance_Of_the_Golden_Snake_pitches_1.5x.txt",
+        calibrator = calibrator_simrbf
+    )
+    exit_code = app.exec()
+
+    log_fp.close()
+    sys.exit(exit_code)
 
 if __name__ == '__main__':
     log_fp = redirect_stdout_to_file()
