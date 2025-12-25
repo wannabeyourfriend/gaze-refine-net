@@ -13,7 +13,7 @@ from eye_tracker_stream import EyeTrackerStream
 # ---------------- CONFIG ----------------
 CIRCLE_RADIUS = 50
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-APRILTAG_DIR = Path("model_calibration/apriltags")
+APRILTAG_DIR = PROJECT_ROOT / "model_calibration" / "apriltags"
 WINDOW_W, WINDOW_H = 1920, 1080
 
 # 默认基础音符（从C3到C5）
@@ -662,11 +662,11 @@ def run_music_ui(log_dir: Path):
 if __name__ == '__main__':
     log_fp = redirect_stdout_to_file()
     app = QApplication(sys.argv)
-    
+    REPO_ROOT = Path(__file__).resolve().parents[2]
     # 使用音高分析结果文件
-    audio_file = "Dance_Of_the_Golden_Snake_1.5x.wav"
-    pitches_file = "Dance_Of_the_Golden_Snake_pitches_1.5x.txt"
+    audio_file = REPO_ROOT / "assets" / "demo_files" / "Dance_Of_the_Golden_Snake.wav"
+    pitches_file = REPO_ROOT / "assets" / "demo_files" / "Dance_Of_the_Golden_Snake_pitches.txt"
     
-    w = GazePianoUI(audio_file, pitches_file)
+    w = GazePianoUI(str(audio_file), str(pitches_file))
     
     sys.exit(app.exec())

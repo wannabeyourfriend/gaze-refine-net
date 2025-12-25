@@ -22,7 +22,7 @@ from model_calibration.post_processing.gaze_calibration_runtime import SimRBFWit
 
 # ---------------- CONFIG ----------------
 CIRCLE_RADIUS = 50
-APRILTAG_DIR = Path("D:\\UCSD_eyetracking\\pupil_lab_project\\system-drift-calibration\\apriltags")
+APRILTAG_DIR = APP_ROOT / "model_calibration" / "apriltags"
 WINDOW_W, WINDOW_H = 1920, 1080
 
 # 默认基础音符（从C3到C5）
@@ -643,7 +643,7 @@ class GazePianoUI(QWidget):
         event.accept()
 
 def redirect_stdout_to_file():
-    log_dir = Path(r"D:\UCSD_eyetracking\pupil_lab_project\system-drift-calibration\judgement_application\logs")
+    log_dir = Path.home() / "Desktop" / "calibration_ui_test" / "origin"
     log_dir.mkdir(exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -744,9 +744,9 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     
     # 使用音高分析结果文件
-    audio_file = "Dance_Of_the_Golden_Snake_1.5x.wav"
-    pitches_file = "Dance_Of_the_Golden_Snake_pitches_1.5x.txt"
+    audio_file = REPO_ROOT / "assets" / "demo_files" / "Dance_Of_the_Golden_Snake.wav"
+    pitches_file = REPO_ROOT / "assets" / "demo_files" / "Dance_Of_the_Golden_Snake_pitches.txt"
     
-    w = GazePianoUI(audio_file, pitches_file)
+    w = GazePianoUI(str(audio_file), str(pitches_file))
     
     sys.exit(app.exec())

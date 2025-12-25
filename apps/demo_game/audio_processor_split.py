@@ -198,7 +198,7 @@ class SimpleAudioProcessor:
 if __name__ == '__main__':
     processor = SimpleAudioProcessor(min_note_duration=0.4)
     
-    audio_file = "Dance_Of _the_Golden_Snake.wav"
+    audio_file = "Dance_Of_the_Golden_Snake.wav"
     if Path(audio_file).exists():
         pitches = processor.detect_pitch_from_audio(audio_file)
         processor.save_pitches(pitches, "Dance_Of_the_Golden_Snake_pitches.txt")
