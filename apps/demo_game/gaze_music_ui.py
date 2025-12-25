@@ -12,7 +12,8 @@ from eye_tracker_stream import EyeTrackerStream
 
 # ---------------- CONFIG ----------------
 CIRCLE_RADIUS = 50
-APRILTAG_DIR = Path("D:\\UCSD_eyetracking\\pupil_lab_project\\system-drift-calibration\\apriltags")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+APRILTAG_DIR = Path("model_calibration/apriltags")
 WINDOW_W, WINDOW_H = 1920, 1080
 
 # 默认基础音符（从C3到C5）
@@ -622,7 +623,7 @@ class GazePianoUI(QWidget):
         event.accept()
 
 def redirect_stdout_to_file():
-    log_dir = Path(r"D:\UCSD_eyetracking\pupil_lab_project\system-drift-calibration\judgement_application\logs")
+    log_dir = Path.home() / "Desktop" / "calibration_ui_test" / "origin"
     log_dir.mkdir(exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
