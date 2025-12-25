@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
 """
-systematic_drift_calibration.py  （已增强版）
-
-功能要点（按照你的要求）：
-- 第一次运行：按原逻辑点亮 6x4 网格、每点等待 2s、采样 4s、剔除距离>250px 样本、保存 samples_target_*.csv 与 grid_gaze_log.csv，并生成两张图（calibration_offsets.png, gaze_clusters.png）。
-- 第一次运行结束后：在 session_dir 下新建 "origin" 子文件夹，把第一次产生的 csv/png 文件复制到 origin。
-- 自动从第一次的 grid_gaze_log.csv 调用 gaze_correction_rbf.GazeRBFCalibrator 构建 RBF 模型（若模块不存在会给出提示）。
-- 等待用户在终端按回车。当用户按回车时开始第二轮运行（RBF 模式）：
-  - 第二轮展示与第一次相同的界面与流程，但在每个 target 的 4s 采样结束后，对样本平均位置用 RBF 隐式反解（correct_gaze_iterative）得到校正坐标，并以该校正坐标作为“系统认定的 gaze”保存与后续绘图。
-  - 第二轮的所有输出（主 CSV、samples、两个 PNG）保存到 session_dir/RBF/ 下。
-- 两轮的输出目录分别为：
-    session_dir/origin/       <- 第一次全部文件（备份）
-    session_dir/RBF/          <- 第二次所有文件
-
+systematic_drift_calibration.py
+功能要点：
+- 第一次运行：按原逻辑点亮 6x4 网格、每点等待 2s、采样 4s、剔除距离>250px 样本、保存 samples_target_*.csv 与 grid_gaze_log.csv。
+- 第一次运行结束后：在 session_dir 下新建 "origin" 子文件夹，把第一次产生的 csv 文件复制到 origin。
+- 等待用户在终端按回车。当用户按回车时开始第二轮运行：
 """
 
 from __future__ import annotations
