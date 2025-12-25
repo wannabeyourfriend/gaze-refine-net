@@ -4,11 +4,12 @@ import sys
 from pathlib import Path
 import torch
 import yaml
-
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import Ridge
 # ====== 直接复用你文件里的代码 ======
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[3]
-NEURAL_REFINE_ROOT = REPO_ROOT / "apps" / "neural-refine"
+NEURAL_REFINE_ROOT = REPO_ROOT / "apps" / "neural_refine"
 
 for p in [PROJECT_ROOT, REPO_ROOT, NEURAL_REFINE_ROOT]:
     if str(p) not in sys.path:
@@ -19,7 +20,7 @@ from post_processing.calibration_model_full_compare import (
     apply_similarity,
     fit_rbf_residual,
 )
-from src.model import build_model
+from neural_refine.src.model import build_model
 
 class SimRBFCalibrator:
     """
@@ -67,7 +68,7 @@ class SimRBFCalibrator:
 
 class CascadeNeuralRefiner:
     """
-    使用 neural-refine (cascade 模式) 在 RBF 结果上进一步细化。
+    使用 neural_refine (cascade 模式) 在 RBF 结果上进一步细化。
     预测的残差是 target - sim_rbf_gaze。
     """
 
@@ -82,7 +83,7 @@ class CascadeNeuralRefiner:
         self.config_path = (
             Path(config_path).resolve()
             if config_path is not None
-            else REPO_ROOT / "apps" / "neural-refine" / "config" / "cascade.yaml"
+            else REPO_ROOT / "apps" / "neural_refine" / "config" / "cascade.yaml"
         )
 
         with self.config_path.open("r") as f:
@@ -114,7 +115,7 @@ class CascadeNeuralRefiner:
 
 class SimRBFWithNeuralCascadeCalibrator(SimRBFCalibrator):
     """
-    先做 similarity+RBF，再用 neural-refine(cascade) 做残差细化。
+    先做 similarity+RBF，再用 neural_refine(cascade) 做残差细化。
     """
 
     def __init__(
@@ -137,3 +138,76 @@ class SimRBFWithNeuralCascadeCalibrator(SimRBFCalibrator):
         sim_x, sim_y = super().correct(x, y)
         refined_x, refined_y, _, _ = self.refiner.refine(x, y, sim_x, sim_y)
         return refined_x, refined_y
+
+class PolynomialCalibrator:
+    """
+    二次多项式模型校准器（基于 calibration_model_full_compare.py 中的 SimplePolynomialCalibrator）
+    """
+
+    def __init__(self, origin_csv_path, degree=2, reg=0.5, use_weight=True):
+        """
+        参数:
+        - origin_csv_path: 校准数据CSV文件路径
+        - degree: 多项式次数
+        - reg: 正则化参数
+        - use_weight: 是否使用 spread 列作为权重
+        """
+        df = pd.read_csv(origin_csv_path)
+        
+        # 提取训练数据
+        X = df[['target_x', 'target_y']].values
+        self.degree = degree
+        
+        # 多项式特征转换
+        self.poly = PolynomialFeatures(degree=degree, include_bias=False)
+        Xp = self.poly.fit_transform(X)
+        
+        # 计算残差
+        dx = df['original_gaze_x'].values - df['target_x'].values
+        dy = df['original_gaze_y'].values - df['target_y'].values
+        
+        # 权重处理
+        if use_weight and 'spread' in df.columns:
+            eps = 1e-6
+            w = 1.0 / (df['spread'].values + eps)**2
+            w = w / np.max(w)
+        else:
+            w = None
+        
+        # 训练模型
+        self.model_dx = Ridge(alpha=reg).fit(Xp, dx, sample_weight=w)
+        self.model_dy = Ridge(alpha=reg).fit(Xp, dy, sample_weight=w)
+        
+        # 存储用于迭代的原始数据
+        self.df = df  # 保存数据用于可能的调试
+
+    def predict_delta(self, x_arr):
+        """预测残差"""
+        Xp = self.poly.transform(x_arr)
+        dx = self.model_dx.predict(Xp)
+        dy = self.model_dy.predict(Xp)
+        return np.vstack([dx, dy]).T
+
+    def correct(self, x, y):
+        """校正单个 gaze 点（迭代方法）"""
+        T = np.array([x, y], dtype=float)
+        G = np.array([x, y], dtype=float)
+        
+        # 迭代校正
+        for _ in range(20):
+            d = self.predict_delta(T.reshape(1, 2))[0]
+            F = T + d - G
+            step = -0.7 * F
+            T += step
+            if np.linalg.norm(step) < 0.5:
+                break
+                
+        return float(T[0]), float(T[1])
+    
+    def correct_batch(self, gaze_points):
+        """批量校正多个 gaze 点"""
+        out = []
+        for gx, gy in gaze_points:
+            corrected = self.correct(gx, gy)
+            out.append(corrected)
+        return np.array(out)
