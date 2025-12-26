@@ -1,2 +1,5 @@
-audio_process, split最后都删掉
-gaze music ui重命名
+audio_process_split 将Dance_Of_the_Golden_Snake音乐的wav文件转录为分割成时间段和对应音高的txt文件
+eye_tracker_stream pupil labs眼动仪的实时数据流传输文件
+single_music_ui 测试不需要额外的18点校准，仅经过pupil labs设备默认校准的结果在demo_game中的表现
+run_demo_game 提供需要进行18点校准的demo_game任务的第二阶段ui
+multiple_music_ui 可以选择测试经过18点的二次多项式校准、simRBF校准以及simRBF校准+Resnet网络修正三种拟合模型在demo_game中的表现

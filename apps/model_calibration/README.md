@@ -1,29 +1,10 @@
-文件说明：
-7th version是最新版本，origin+test两部分 生成的csv文件只有origin和target眼动数据，取消了poly和rbf数据，统一放到了后续处理部分
-calibration_model_full_compare文件做第一阶段的单个文件后处理，可以根据单个session的origin数据做模型拟合，使用test数据做效果的对比分析
-
-batch_run_all_sessions 文件目标：调用calibration_model_full_compare实现批量化的模型拟合与对比，并且将test部分的csv文件加上模型拟合修正后的数据做堆叠生成用于深度学习的数据
-    生成all_trials_model_predictions文件，4s误差拟合效果还是最好；可以几秒的都做一下对比，证明模型普适性
-
-需要补充的小实验：
-测算水平方向和垂直方向误差有没有显著区别
-测算test部分的origin点的效果有没有明显好于其他点的效果，避免过拟合
-验证2s的间隔是否合理，4s的统计时间是否最优   
-    写一个文件对全部有before文件的session进行处理，多久时间固定进入一个spread的圈   解决了√ post—_processsing 中的2s_reaction
-    再写一个文件用同一文件夹中sample的前1、2、3s数据生成新的grid_gaze_log_ns  解决了√ build_grid_gaze_log_partial
-直接跑深度学习说明学不出来或者效果不佳，消融实验验证先进行模型拟合的必要性
-
-做一个验证效果的demo 打字？多维度表征拟合效果
-
-judgement_application部分：
-audio_process是用来处理网上下载的mp3文件的，处理成能用的wav
-eye_tracker_stream 单纯处理实时数据流
-audio_processor_split 输入音频文件输出txt文件分割结果
-gaze_music_ui 正经金蛇狂舞ui界面 
-gaze_music_ui_2th用来给run_full_experiment调用,在接口上有一些小改动(接入rbf模型)
-run_full_experiment 跑18点+ui的整体流程 已跑通
-
-把实时数据流导进去 √
-做注视结果得分统计和其他量化指标 √
-然后做与校准的融合，实现使用处理后数据判断阈值的效果 √
-人工修正txt对齐文件 √
+apriltags 文件夹存放用于定位屏幕的apriltags码
+systematic_drift_calibration 实现了18点拟合数据和32点测试数据的采集流程
+post_processing 采集的数据后处理文件夹
+    2s_reaction 统计全部采集点在亮之后多久时间可以进入最终predict位置附近的3σ范围
+    batch_model_evaluation 改一改，负责做配对T检验
+    batch_run_all_sessions 文件目标：调用calibration_model_full_compare实现批量化的模型拟合与对比，并且将test部分的csv文件加上模型拟合修正后的数据做堆叠生成用于深度学习的数据；同时负责验证4s数据效果最好 （修改输入的grid_gaze_log）
+        生成all_trials_model_predictions文件，4s误差拟合效果还是最好；可以几秒的都做一下对比，证明模型普适性
+    build_grid_gaze_log_partial 对于每个试次，同一文件夹中sample的前1、2、3s数据生成新的grid_gaze_log_ns 测试是否4s效果最好
+    calibration_model_full_compare 所有供对比的模型放在这里；对单个试次进行处理对比各模型效果
+    gaze_calibration_runtime 为demo_game服务，调用calibration_model_full_compare提供其需要的多项式、simRBF及simRBF_refined模型
