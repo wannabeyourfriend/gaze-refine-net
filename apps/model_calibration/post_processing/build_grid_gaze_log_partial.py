@@ -14,7 +14,7 @@ RATIOS = {
 }
 
 # =======================
-# 工具函数
+# Helper functions
 # =======================
 def compute_gaze_stats(xs, ys):
     mean_x = np.mean(xs)
@@ -24,7 +24,7 @@ def compute_gaze_stats(xs, ys):
 
 
 # =======================
-# 扫描三层目录
+# Scan three-level directory structure
 # =======================
 for subject in os.listdir(ROOT_DIR):
     subject_path = os.path.join(ROOT_DIR, subject)
@@ -54,13 +54,13 @@ for subject in os.listdir(ROOT_DIR):
 
             print(f"Processing: {data_path}")
 
-            # 只读取需要迁移的 4 列
+            # Read only the four columns to be migrated
             grid_df = pd.read_csv(
                 grid_path,
                 usecols=["timestamp", "target_index", "target_x", "target_y"]
             )
 
-            # 建立 samples 映射
+            # Build samples map
             sample_map = {}
             for fname in sample_files:
                 idx = int(sample_pattern.match(fname).group(1))
@@ -68,7 +68,7 @@ for subject in os.listdir(ROOT_DIR):
                     os.path.join(data_path, fname)
                 )
 
-            # 针对每个比例生成新 grid
+            # Generate new grids for each ratio
             for tag, ratio in RATIOS.items():
                 rows = []
 
@@ -115,4 +115,4 @@ for subject in os.listdir(ROOT_DIR):
                 )
                 new_df.to_csv(out_path, index=False)
 
-print("✅ 精简字段后的 grid_gaze_log_1s / 2s / 3s 已生成")
+print("✅ Generated trimmed grid_gaze_log_1s / 2s / 3s files")

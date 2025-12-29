@@ -1,5 +1,5 @@
 # audio_processor_simple.py
-# 简单音频处理器：只分析音频，输出音高序列文件
+# Simple audio processor: analyze audio and export pitch sequences
 
 import numpy as np
 from scipy.io import wavfile
@@ -10,12 +10,12 @@ import librosa
 class SimpleAudioProcessor:
     def __init__(self, min_note_duration=0.4):
         """
-        初始化音频处理器
-        min_note_duration: 最小音符持续时间（秒），短于此时间的音符会合并到前一个音符
+        Initialize the audio processor.
+        min_note_duration: minimum note duration (seconds); shorter notes are merged into the previous one.
         """
         self.min_note_duration = min_note_duration
         
-        # 音符频率表（C3到C6）
+        # Note frequency table (C3 to C6)
         note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         self.note_freqs = {}
         
@@ -27,16 +27,16 @@ class SimpleAudioProcessor:
                 self.note_freqs[note_name] = round(freq, 2)
     
     def detect_pitch_from_audio(self, audio_file):
-        """检测音频中的音高序列"""
-        print(f"分析音频文件: {audio_file}")
+        """Detect the pitch sequence from an audio file."""
+        print(f"Analyzing audio file: {audio_file}")
         
         try:
-            # 尝试使用librosa
+            # Try librosa first
             y, sr = librosa.load(audio_file, sr=None, mono=True)
             duration = len(y) / sr
-            print(f"音频时长: {duration:.2f}秒, 采样率: {sr}Hz")
+            print(f"Audio duration: {duration:.2f} seconds, sample rate: {sr}Hz")
             
-            # 使用pYIN算法
+            # Use the pYIN algorithm
             f0, voiced_flag, voiced_probs = librosa.pyin(
                 y, 
                 fmin=librosa.note_to_hz('C3'),
@@ -46,7 +46,7 @@ class SimpleAudioProcessor:
                 hop_length=512
             )
             
-            # 转换为音符序列
+            # Convert to a note sequence
             pitches = []
             hop_seconds = 512 / sr
             
@@ -57,27 +57,27 @@ class SimpleAudioProcessor:
                     if note:
                         pitches.append((time, time + hop_seconds, note))
             
-            # 合并连续相同的音符
+            # Merge consecutive identical notes
             merged_pitches = self.merge_notes(pitches)
-            print(f"检测到 {len(merged_pitches)} 个音符段落")
+            print(f"Detected {len(merged_pitches)} note segments")
             
             return merged_pitches
             
         except Exception as e:
-            print(f"librosa分析失败: {e}")
-            # 回退到简单方法
+            print(f"librosa analysis failed: {e}")
+            # Fallback to the simple method
             return self.detect_pitch_simple(audio_file)
     
     def detect_pitch_simple(self, audio_file):
-        """简单音高检测方法"""
+        """Simple pitch detection method."""
         try:
             sample_rate, data = wavfile.read(audio_file)
-            
-            # 单声道转换
+
+            # Convert to mono
             if len(data.shape) > 1:
                 data = data.mean(axis=1)
-            
-            # 参数
+
+            # Parameters
             frame_size = int(sample_rate * 0.05)  # 50ms
             hop_size = int(sample_rate * 0.02)   # 20ms
             
@@ -87,7 +87,7 @@ class SimpleAudioProcessor:
                 time = i / sample_rate
                 
                 if np.max(np.abs(frame)) > 0.05:
-                    # 找主要频率
+                    # Find the dominant frequency
                     freqs = np.fft.rfftfreq(frame_size, 1/sample_rate)
                     fft_result = np.abs(np.fft.rfft(frame))
                     
@@ -104,8 +104,8 @@ class SimpleAudioProcessor:
             return merged_pitches
             
         except Exception as e:
-            print(f"简单分析也失败: {e}")
-            # 返回示例数据
+            print(f"Simple analysis also failed: {e}")
+            # Return example data
             return [
                 (0.0, 1.0, "C4"),
                 (1.0, 2.0, "D4"),
@@ -118,7 +118,7 @@ class SimpleAudioProcessor:
             ]
     
     def freq_to_note(self, freq):
-        """频率转音符"""
+        """Convert frequency to note."""
         if freq <= 0:
             return None
         
@@ -127,7 +127,7 @@ class SimpleAudioProcessor:
         return closest_note[0]
     
     def merge_notes(self, pitches):
-        """合并连续相同的音符"""
+        """Merge consecutive identical notes."""
         if not pitches:
             return []
         
@@ -138,23 +138,23 @@ class SimpleAudioProcessor:
             t0, t1, note = pitches[i]
             
             if note == current[2] and t0 - current[1] < 0.2:
-                # 相同音符且间隔短，合并
+                # Same note with a short gap, merge
                 current[1] = t1
             else:
-                # 检查持续时间
+                # Check duration
                 duration = current[1] - current[0]
                 if duration >= self.min_note_duration:
                     merged.append(tuple(current))
                 elif merged:
-                    # 短音符合并到前一个
+                    # Merge short note into the previous one
                     prev = list(merged[-1])
                     prev[1] = current[1]
                     merged[-1] = tuple(prev)
-                
-                # 开始新的音符
+
+                # Start a new note
                 current = [t0, t1, note]
-        
-        # 处理最后一个
+
+        # Handle the last note
         duration = current[1] - current[0]
         if duration >= self.min_note_duration:
             merged.append(tuple(current))
@@ -166,20 +166,20 @@ class SimpleAudioProcessor:
         return merged
     
     def save_pitches(self, pitches, output_file):
-        """保存音高序列到文件"""
+        """Save the pitch sequence to a file."""
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write("# start_time,end_time,note\n")
                 for t0, t1, note in pitches:
                     f.write(f"{t0:.3f},{t1:.3f},{note}\n")
-            print(f"音高序列已保存到: {output_file}")
+            print(f"Pitch sequence saved to: {output_file}")
             return True
         except Exception as e:
-            print(f"保存失败: {e}")
+            print(f"Failed to save pitch sequence: {e}")
             return False
-    
+
     def load_pitches(self, input_file):
-        """从文件加载音高序列"""
+        """Load pitch sequence from a file."""
         try:
             pitches = []
             with open(input_file, 'r', encoding='utf-8') as f:
@@ -189,10 +189,10 @@ class SimpleAudioProcessor:
                         parts = line.split(',')
                         if len(parts) == 3:
                             pitches.append((float(parts[0]), float(parts[1]), parts[2]))
-            print(f"从文件加载了 {len(pitches)} 个音符段落")
+            print(f"Loaded {len(pitches)} note segments from file")
             return pitches
         except Exception as e:
-            print(f"加载失败: {e}")
+            print(f"Failed to load pitch sequence: {e}")
             return []
 
 if __name__ == '__main__':
@@ -203,13 +203,13 @@ if __name__ == '__main__':
         pitches = processor.detect_pitch_from_audio(audio_file)
         processor.save_pitches(pitches, "Dance_Of_the_Golden_Snake_pitches.txt")
         
-        # 直接提取唯一音符
+        # Extract unique notes directly
         unique_notes = []
         for _, _, note in pitches:
             if note not in unique_notes:
                 unique_notes.append(note)
         
-        print(f"\n提取到的唯一音符 ({len(unique_notes)}个):")
+        print(f"\nExtracted unique notes ({len(unique_notes)}):")
         print(sorted(unique_notes, key=lambda x: processor.note_freqs.get(x, 0)))
     else:
-        print(f"文件不存在: {audio_file}")
+        print(f"File does not exist: {audio_file}")

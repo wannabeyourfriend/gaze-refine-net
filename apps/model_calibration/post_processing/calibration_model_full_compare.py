@@ -2,7 +2,7 @@
 """
 calibration_model_full_compare.py
 
-一键比较多种校正模型：
+Compare multiple calibration models in one run:
 - Similarity (Procrustes)
 - Polynomial (use provided PolynomialDriftCalibrator)
 - RBF residual (scipy.interpolate.Rbf)
@@ -10,8 +10,8 @@ calibration_model_full_compare.py
 - Piecewise Affine (Delaunay + per-triangle affine)
 - GPR residual (sklearn GaussianProcessRegressor)
 
-依赖: numpy, scipy, sklearn, pandas, matplotlib
-不需要额外安装第三方库。
+Dependencies: numpy, scipy, sklearn, pandas, matplotlib
+No additional third-party packages beyond the above are required.
 """
 
 import numpy as np
@@ -25,8 +25,8 @@ from sklearn.gaussian_process.kernels import RBF as SK_RBF, WhiteKernel
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import Ridge
 
-# ========== 用户可改配置 ==========
-ORIGIN_PATH = "C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration\\Unnamed\\2025-12-14_17-53-40\\origin\\grid_gaze_log.csv"   # 若不存在，会尝试 "data.csv" 并自动切分
+# ========== User-configurable settings ==========
+ORIGIN_PATH = "C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration\\Unnamed\\2025-12-14_17-53-40\\origin\\grid_gaze_log.csv"   # If missing, will try 'data.csv' and split automatically
 TEST_PATH = "C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration\\Unnamed\\2025-12-14_17-53-40\\test\\grid_gaze_log.csv"
 RBF_PARAM_GRID = [("thin_plate", 1.0), ("multiquadric", 0.0), ("multiquadric", 1.0), ("multiquadric", 2.0)]
 POLY_DEGREE = 2
@@ -264,11 +264,10 @@ def plot_arrow_field(df_targets, corrected, title, fname=None):
 
 def run_one_session(origin_path, test_path):
     """
-    运行一次 origin/test 的模型比较（不产生图像）。
-    返回 DataFrame:
-        columns = ["model", "mean", "median", "p95"]
+    Run one origin/test model comparison (no plotting).
+    Returns a DataFrame with columns ["model", "mean", "median", "p95"].
     """
-    # === 1. 读取数据 ===
+    # === 1. Load data ===
     origin_df = pd.read_csv(origin_path)
     test_df   = pd.read_csv(test_path)
 
@@ -299,7 +298,7 @@ def run_one_session(origin_path, test_path):
 
 
     # ======================================
-    # 4. Similarity + RBF (多组参数)
+    # 4. Similarity + RBF (multiple parameter sets)
     # ======================================
     origin_sim = apply_similarity(origin_obs, s, R, t)
     for kernel, smooth in RBF_PARAM_GRID:
@@ -337,17 +336,16 @@ def run_one_session(origin_path, test_path):
     results.append(["sim+gpr",
                     stats_gpr["mean"], stats_gpr["median"], stats_gpr["p95"]])
 
-    # === 最终输出 DataFrame ===
+    # === Final output DataFrame ===
     df = pd.DataFrame(results, columns=["model", "mean", "median", "p95"])
     return df
 
 # def run_one_session_horizontal(origin_path, test_path):
 #     """
-#     只分析水平误差（x方向）。
-#     输出 DataFrame:
-#         columns = ["model", "mean", "median", "p95"]
+#     Analyze only horizontal error (x direction).
+#     Output DataFrame columns = ["model", "mean", "median", "p95"]
 #     """
-#     # === 1. 读取数据 ===
+#     # === 1. Load data ===
 #     origin_df = pd.read_csv(origin_path)
 #     test_df   = pd.read_csv(test_path)
 
@@ -359,7 +357,7 @@ def run_one_session(origin_path, test_path):
 #     results = []
 
 #     # ======================================
-#     # (A) 定义仅计算水平误差的 eval
+#     # (A) Define eval that uses horizontal error only
 #     # ======================================
 #     def eval_stats_x(pred_xy, tgt_xy):
 #         err = np.abs(pred_xy[:,0] - tgt_xy[:,0])   # horizontal error only
@@ -370,7 +368,7 @@ def run_one_session(origin_path, test_path):
 #         }
 
 #     # ======================================
-#     # 2. Similarity baseline  (2D变换，但只用 x误差)
+#     # 2. Similarity baseline (2D transform, measure x error only)
 #     # ======================================
 #     s, R, t = fit_similarity(origin_obs, origin_tgt)
 #     pred_sim = apply_similarity(test_obs, s, R, t)
@@ -379,10 +377,10 @@ def run_one_session(origin_path, test_path):
 #                     stats_sim["mean"], stats_sim["median"], stats_sim["p95"]])
 
 #     # ======================================
-#     # 3. Polynomial （只拟合 original_dx，水平误差模型）
+#     # 3. Polynomial (fit original_dx only for horizontal error)
 #     # ======================================
 #     if {'original_dx','original_dy'}.issubset(origin_df.columns):
-#         # 构造只训练水平模型的简单版本
+#         # Build a simplified model that trains only horizontal offsets
 #         class Poly1D_X:
 #             def __init__(self, df, deg=POLY_DEGREE, alpha=POLY_ALPHA):
 #                 X = df[['target_x','target_y']].values
@@ -418,7 +416,7 @@ def run_one_session(origin_path, test_path):
 #         poly = None
 
 #     # ======================================
-#     # 4. Similarity + RBF (只拟合水平残差 rbf_x)
+#     # 4. Similarity + RBF (fit horizontal residual rbf_x only)
 #     # ======================================
 #     origin_sim = apply_similarity(origin_obs, s, R, t)
 
@@ -437,7 +435,7 @@ def run_one_session(origin_path, test_path):
 #                         stats_rbf["mean"], stats_rbf["median"], stats_rbf["p95"]])
 
 #     # ======================================
-#     # 5. TPS residual (仍是2D，但只使用 x输出)
+#     # 5. TPS residual (still 2D, but only x output used)
 #     # ======================================
 #     tps = ThinPlateSpline2D(origin_sim, origin_tgt, reg=1e-3)
 #     tps_pred = tps.transform(pred_sim)
@@ -446,7 +444,7 @@ def run_one_session(origin_path, test_path):
 #                     stats_tps["mean"], stats_tps["median"], stats_tps["p95"]])
 
 #     # ======================================
-#     # 6. Piecewise Affine (仍是2D，但只使用 x输出)
+#     # 6. Piecewise Affine (still 2D, only x output used)
 #     # ======================================
 #     pwa = PiecewiseAffine(origin_sim, origin_tgt)
 #     pwa_pred = pwa.transform(pred_sim)
@@ -455,7 +453,7 @@ def run_one_session(origin_path, test_path):
 #                     stats_pwa["mean"], stats_pwa["median"], stats_pwa["p95"]])
 
 #     # ======================================
-#     # 7. GPR residual (只训练水平 GPR)
+#     # 7. GPR residual (train horizontal GPR only)
 #     # ======================================
 #     resid_x = origin_tgt[:,0] - origin_sim[:,0]
 #     gpr_kernel = SK_RBF(length_scale=200.0) + WhiteKernel(noise_level=1.0)
@@ -471,15 +469,14 @@ def run_one_session(origin_path, test_path):
 #     results.append(["sim+gpr-X",
 #                     stats_gpr["mean"], stats_gpr["median"], stats_gpr["p95"]])
 
-#     # === 最终输出 DataFrame ===
+#     # === Final output DataFrame ===
 #     df = pd.DataFrame(results, columns=["model", "mean", "median", "p95"])
 #     return df
 
 # def run_one_session_vertical(origin_path, test_path):
 #     """
-#     只分析垂直误差（y方向）。
-#     输出 DataFrame:
-#         columns = ["model", "mean", "median", "p95"]
+#     Analyze only vertical error (y direction).
+#     Output DataFrame columns = ["model", "mean", "median", "p95"]
 #     """
 #     # === 1. load data ===
 #     origin_df = pd.read_csv(origin_path)

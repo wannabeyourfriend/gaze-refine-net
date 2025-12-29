@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 
-# ===== 导入你现有的模型实现 =====
+# ===== Import existing model implementations =====
 from calibration_model_full_compare import (
     fit_similarity, apply_similarity,
     SimplePolynomialCalibrator,
@@ -15,7 +15,7 @@ from calibration_model_full_compare import (
 ROOT_DIR = r"C:\Users\Liu Jiaqi\Desktop\systematic_recalibration"
 
 # ==========================
-# 单试次处理
+# Single-session processing
 # ==========================
 def process_one_trial(subject, timestamp, origin_path, test_path):
     origin_df = pd.read_csv(origin_path)
@@ -92,7 +92,7 @@ def process_one_trial(subject, timestamp, origin_path, test_path):
 
 
 # ==========================
-# 批量扫描全部试次
+# Scan all sessions
 # ==========================
 all_rows = []
 
@@ -120,14 +120,14 @@ for subject in os.listdir(ROOT_DIR):
         all_rows.append(df_trial)
 
 # ==========================
-# 汇总输出 CSV
+# Aggregate and export CSV
 # ==========================
 final_df = pd.concat(all_rows, ignore_index=True)
 out_csv = os.path.join(ROOT_DIR, "all_trials_model_predictions.csv")
 final_df.to_csv(out_csv, index=False)
 
 # ==========================
-# 终端输出误差统计
+# Console error statistics
 # ==========================
 print("\n===== Overall model error statistics =====")
 
@@ -159,7 +159,7 @@ for name, (px, py) in models.items():
     )
 
 # ==========================
-# 各被试分别的终端输出
+# Per-participant console output
 # ==========================
 print("\n===== Per-subject model error statistics =====")
 
@@ -176,4 +176,4 @@ for subject, g in final_df.groupby("subject"):
             f"{name:10s} | mean = {err.mean():.2f} px | var = {err.var():.2f}"
         )
 
-print("\n✅ 批量试次处理完成")
+print("\n✅ Batch session processing complete")
