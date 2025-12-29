@@ -1,23 +1,23 @@
 # ============================================
 # batch_model_evaluation.py
-# 批量分析多被试、多会话的模型校正效果
-# 以 similarity 模型为基准进行误差归一化
+# Batch analysis of model calibration results across participants and sessions
+# Uses the similarity model as the baseline for normalization
 # ============================================
 
 import os
 import pandas as pd
 import numpy as np
 from glob import glob
-from calibration_model_full_compare import run_one_session_vertical, run_one_session_horizontal, run_one_session   # 你原脚本中需提供该函数
+from calibration_model_full_compare import run_one_session_vertical, run_one_session_horizontal, run_one_session   # The source script must provide these functions
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import ttest_rel
 
 def check_valid_session(sess_dir):
     """
-    检查一个时间文件夹是否结构正确：
-      1. 含 origin 和 test 两个文件夹
-      2. 各自含 grid_gaze_log.csv
+    Validate that a timestamped folder has the expected structure:
+      1. Contains origin and test subfolders
+      2. Each subfolder has grid_gaze_log.csv
     """
     origin_path = os.path.join(sess_dir, "origin", "grid_gaze_log.csv")
     test_path   = os.path.join(sess_dir, "test",   "grid_gaze_log.csv")
@@ -30,7 +30,7 @@ def check_valid_session(sess_dir):
 
 def evaluate_batch_vertical(root_dir, save_csv=True):
     """
-    批量分析入口（不做 similarity 归一化）。
+    Batch evaluation entry point (without similarity normalization).
     """
     results = []
 
@@ -39,7 +39,7 @@ def evaluate_batch_vertical(root_dir, save_csv=True):
         if not os.path.isdir(person_dir):
             continue
 
-        print(f"\n👤 检测被试: {person}")
+        print(f"\n👤 Processing participant: {person}")
         sessions = sorted(os.listdir(person_dir))
 
         for sess in sessions:
@@ -49,31 +49,31 @@ def evaluate_batch_vertical(root_dir, save_csv=True):
 
             valid, origin_path, test_path = check_valid_session(sess_dir)
             if not valid:
-                print(f"⚠️ 跳过 {person}/{sess} —— 结构不完整或缺少CSV")
+                print(f"⚠️ Skipping {person}/{sess} — incomplete structure or missing CSV")
                 continue
 
-            print(f"✅ 正在处理 {person}/{sess}")
+            print(f"✅ Processing {person}/{sess}")
             try:
                 stats_df = run_one_session(origin_path, test_path)
                 stats_df["person"] = person
                 stats_df["session"] = sess
                 results.append(stats_df)
             except Exception as e:
-                print(f"❌ 处理 {person}/{sess} 失败: {e}")
+                print(f"❌ Failed to process {person}/{sess}: {e}")
 
     if not results:
-        print("❌ 未找到任何有效实验数据。")
+        print("❌ No valid experiment data found.")
         return None, None
 
-    # 汇总所有结果
+    # Aggregate results
     print("results length:", len(results))
     all_df = pd.concat(results, ignore_index=True)
 
-    # === 按模型统计平均表现（不做归一化） ===
+    # === Model-wise averages (no normalization) ===
     summary = (
         all_df.groupby("model")[["mean", "median", "p95"]]
         .agg(["mean", "std"])
-        .sort_values(("mean", "mean"))   # 按 mean 的平均值排序
+        .sort_values(("mean", "mean"))   # Sort by average mean error
     )
 
     print("\n=== Overall Summary (absolute error, no normalization) ===")
@@ -91,7 +91,7 @@ def evaluate_batch_vertical(root_dir, save_csv=True):
     x = np.arange(N)
 
     # same base color, alpha increases from 0.3 → 1.0
-    base_color = "steelblue"   # 可换成 "black", "gray", "navy", etc.
+    base_color = "steelblue"   # Can be changed to "black", "gray", "navy", etc.
     alphas = np.linspace(0.3, 1.0, N)
 
     plt.figure(figsize=(10, 6))
@@ -119,18 +119,18 @@ def evaluate_batch_vertical(root_dir, save_csv=True):
         os.makedirs("batch_results", exist_ok=True)
         all_df.to_csv("batch_results/results_all_sessions_no_norm.csv", index=False)
         summary.to_csv("batch_results/summary_overall_no_norm.csv")
-        print("\n✅ 结果已保存到 ./batch_results/")
+        print("\n✅ Results saved to ./batch_results/")
     if save_csv:
         os.makedirs("batch_results", exist_ok=True)
         all_df.to_csv("batch_results/results_all_sessions_no_norm.csv", index=False)
         summary.to_csv("batch_results/summary_overall_no_norm.csv")
-        print("\n✅ 结果已保存到 ./batch_results/")
+        print("\n✅ Results saved to ./batch_results/")
 
     return all_df, summary
 
 def evaluate_batch_horizontal(root_dir, save_csv=True):
     """
-    批量分析入口（不做 similarity 归一化）。
+    Batch evaluation entry point (without similarity normalization).
     """
     results = []
 
@@ -139,7 +139,7 @@ def evaluate_batch_horizontal(root_dir, save_csv=True):
         if not os.path.isdir(person_dir):
             continue
 
-        print(f"\n👤 检测被试: {person}")
+        print(f"\n👤 Processing participant: {person}")
         sessions = sorted(os.listdir(person_dir))
 
         for sess in sessions:
@@ -149,31 +149,31 @@ def evaluate_batch_horizontal(root_dir, save_csv=True):
 
             valid, origin_path, test_path = check_valid_session(sess_dir)
             if not valid:
-                print(f"⚠️ 跳过 {person}/{sess} —— 结构不完整或缺少CSV")
+                print(f"⚠️ Skipping {person}/{sess} — incomplete structure or missing CSV")
                 continue
 
-            print(f"✅ 正在处理 {person}/{sess}")
+            print(f"✅ Processing {person}/{sess}")
             try:
                 stats_df = run_one_session_horizontal(origin_path, test_path)
                 stats_df["person"] = person
                 stats_df["session"] = sess
                 results.append(stats_df)
             except Exception as e:
-                print(f"❌ 处理 {person}/{sess} 失败: {e}")
+                print(f"❌ Failed to process {person}/{sess}: {e}")
 
     if not results:
-        print("❌ 未找到任何有效实验数据。")
+        print("❌ No valid experiment data found.")
         return None, None
 
-    # 汇总所有结果
+    # Aggregate results
     print("results length:", len(results))
     all_df = pd.concat(results, ignore_index=True)
 
-    # === 按模型统计平均表现（不做归一化） ===
+    # === Model-wise averages (no normalization) ===
     summary = (
         all_df.groupby("model")[["mean", "median", "p95"]]
         .agg(["mean", "std"])
-        .sort_values(("mean", "mean"))   # 按 mean 的平均值排序
+        .sort_values(("mean", "mean"))   # Sort by average mean error
     )
 
     print("\n=== Overall Summary (absolute error, no normalization) ===")
@@ -185,7 +185,7 @@ def evaluate_batch_horizontal(root_dir, save_csv=True):
 
 def get_model_errors(all_df, model_name, metric="mean"):
     """
-    返回某个模型在所有 session 上的误差值，按 (person, session) 排序后配对。
+    Return error values for a model across all sessions, paired after sorting by (person, session).
     """
     df = all_df[all_df["model"] == model_name].copy()
     df = df.sort_values(["person", "session"])
@@ -194,7 +194,7 @@ def get_model_errors(all_df, model_name, metric="mean"):
 
 def paired_t_test(all_df_horizontal, all_df_vertical, model_A, model_B, metric="mean"):
     """
-    配对 t 检验：检验 model_A 是否显著优于 model_B（误差更小）
+    Paired t-test: evaluate whether model_A is significantly better than model_B (smaller error).
     """
     errors_A = get_model_errors(all_df_horizontal, model_A, metric)
     errors_B = get_model_errors(all_df_vertical, model_B, metric)
@@ -206,9 +206,9 @@ def paired_t_test(all_df_horizontal, all_df_vertical, model_A, model_B, metric="
     print(f"t = {stat:.4f}, p = {p:.6f}")
     print(p)
     if p < 0.05:
-        print("✔ 结果显著： 水平误差显著更小")
+        print("✔ Significant: horizontal error is significantly smaller")
     else:
-        print("✘ 不显著：不能拒绝两种方法误差相同的假设")
+        print("✘ Not significant: cannot reject equal error hypothesis")
     print("==============================================")
 
 if __name__ == "__main__":
@@ -216,4 +216,3 @@ if __name__ == "__main__":
     all_df_vertical, summary = evaluate_batch_vertical(root)
     # all_df_horizontal, summary = evaluate_batch_horizontal(root)
     # paired_t_test(all_df_horizontal, all_df_vertical, "sim+pwa-X", "sim+pwa-Y")
-

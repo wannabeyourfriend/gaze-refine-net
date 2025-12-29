@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 systematic_drift_calibration.py
-功能要点：
-- 第一次运行：按原逻辑点亮 6x4 网格、每点等待 2s、采样 4s、剔除距离>250px 样本、保存 samples_target_*.csv 与 grid_gaze_log.csv。
-- 第一次运行结束后：在 session_dir 下新建 "origin" 子文件夹，把第一次产生的 csv 文件复制到 origin。
-- 等待用户在终端按回车。当用户按回车时开始第二轮运行：
+Key behavior:
+- First run: light up a 6x4 grid, wait 2s per target, sample 4s, discard samples farther than 250px, save samples_target_*.csv and grid_gaze_log.csv.
+- After the first run finishes: create an "origin" subfolder under session_dir and copy the generated CSV files there.
+- Wait for the user to press Enter, then start the second run:
 """
 
 from __future__ import annotations
@@ -40,14 +40,14 @@ GRID_COLS = 4
 GRID_ROWS = 3
 DOT_RADIUS = 10
 HIGHLIGHT_RADIUS = 10
-INITIAL_WAIT_MS = 8000  # 启动等待时间
+INITIAL_WAIT_MS = 8000  # Startup wait time
 APRILTAG_DIR = Path(__file__).resolve().parent / "apriltags"
 ZMQ_REQ_PORT = 50020
 
 # sampling params
-PRE_WAIT_MS = 2000   # 亮起后等待 2s
-SAMPLE_DURATION_MS = 4000  # 采样 4s
-MAX_SAMPLE_DIST_PX = 500  # 剔除半径
+PRE_WAIT_MS = 2000   # Wait 2s after highlight
+SAMPLE_DURATION_MS = 4000  # Sample for 4s
+MAX_SAMPLE_DIST_PX = 500  # Rejection radius
 
 # ------------------------------------------
 class EyeTrackerWorker(QObject):
@@ -88,24 +88,24 @@ class EyeTrackerWorker(QObject):
                 self.sub.setsockopt(zmq.SUBSCRIBE, t)
             self.unpacker = msgpack.Unpacker(raw=False)
 
-            # ✅ 改这里：启动一个 QTimer，周期调用 run_loop 一次
+            # Start a QTimer that periodically invokes run_once
             self.timer = QTimer()
             self.timer.timeout.connect(self.run_once)
-            self.timer.start(5)  # 每5ms 调用一次
+            self.timer.start(5)  # Call every 5ms
 
         except Exception as e:
             print(f"EyeTrackerWorker failed to start ZMQ: {e}")
             self._running = False
 
     def run_once(self):
-        """非阻塞采集一次 gaze 数据"""
+        """Collect one gaze sample without blocking."""
         if not self._running or self.sub is None:
             return
         BORDER = 21
         try:
             topic, payload = self.sub.recv_multipart(flags=zmq.NOBLOCK)
         except zmq.Again:
-            return  # 没数据就跳过
+            return  # Skip when no data
         except zmq.ZMQError as e:
             print("ZMQ socket error:", e)
             self._running = False
@@ -116,7 +116,7 @@ class EyeTrackerWorker(QObject):
             if not self._running:
                 break
 
-            # 只处理 surfaces 数据
+            # Only handle surface data
             if topic.startswith(self.surf_topic):
                 gos = msg.get("gaze_on_surfaces") or []
                 if not gos:
@@ -133,7 +133,7 @@ class EyeTrackerWorker(QObject):
                 self.gaze.emit(x, y, on_surf)
 
     def stop(self):
-        """安全停止线程"""
+        """Stop the worker safely."""
         print("🛑 Stopping EyeTrackerWorker...")
         self._running = False
         if self.timer:
@@ -194,7 +194,7 @@ class DotLabel(QLabel):
 
     def paintEvent(self, e):
         # if not self.lit:
-        #     return  # 不绘制黑色点
+        #     return  # Skip drawing dark dots when unlit
         qp = QPainter(self)
         qp.setRenderHint(QPainter.RenderHint.Antialiasing)
         if self.lit:
@@ -221,7 +221,7 @@ class GridTester(QWidget):
       - log_dir: Path to save outputs for this run
       - rbf_calibrator: None for origin run; GazeRBFCalibrator instance for rbf run
     """
-    closed = pyqtSignal()  # ✅ 新增信号
+    closed = pyqtSignal()  # Additional signal
     def __init__(self, log_dir: Path, rbf_calibrator=None, poly_calibration = None, custom_points=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Pupil Grid Tester")
@@ -486,11 +486,11 @@ class GridTester(QWidget):
         cols = GRID_COLS
         rows = GRID_ROWS
 
-        # 原网格中心坐标
+        # Original grid center coordinates
         xs = [left + (right - left) * (i + 0.5) / cols for i in range(cols)]
         ys = [top + (bottom - top) * (j + 0.5) / rows for j in range(rows)]
 
-        # 新增 (rows-1)*(cols-1) 个中点
+        # Add (rows-1)*(cols-1) midpoints
         new_points = []
         for j in range(rows - 1):
             for i in range(cols - 1):
@@ -498,7 +498,7 @@ class GridTester(QWidget):
                 cy = (ys[j] + ys[j + 1]) / 2
                 new_points.append((cx, cy))
 
-        # 生成 DotLabel 对象并加入 dots 列表
+        # Create DotLabel objects and append
         for (cx, cy) in new_points:
             d = DotLabel(cx, cy, DOT_RADIUS, parent=self)
             self.dots.append(d)
@@ -508,7 +508,7 @@ class GridTester(QWidget):
         if self.tracker_worker:
             self.tracker_worker.stop()
         if self.tracker_thread:
-            self.tracker_thread.quit()  # ✅ 现在事件循环是活的，可以用 quit()
+            self.tracker_thread.quit()  # Event loop is active; safe to quit
             self.tracker_thread.wait()
         self.closed.emit()
         super().closeEvent(ev)
@@ -518,24 +518,24 @@ class GridTester(QWidget):
 # Main entrypoint
 # -----------------------
 def main():
-    # -------- 被试目录初始化 --------
+    # -------- Participant directory setup --------
     BASE_SAVE_DIR = Path(r"C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration")
 
-    # 询问被试名称
+    # Ask participant name
     participant_name = input("Please input the participant name: ").strip()
     if not participant_name:
         participant_name = "Unnamed"
 
-    # 建立被试主文件夹
+    # Create participant folder
     participant_dir = BASE_SAVE_DIR / participant_name
     participant_dir.mkdir(parents=True, exist_ok=True)
 
-    # 建立时间戳子文件夹
+    # Create timestamp subfolder
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     session_dir = participant_dir / timestamp
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    # 设置全局保存路径变量（主 CSV）
+    # Set global save path (main CSV)
     LOG_DIR = session_dir
 
     print(f"\n✅ data will be saved in: {LOG_DIR}\n")
@@ -558,10 +558,10 @@ def main():
 
     # Start a fresh QApplication and second GridTester
     # Note: some platforms don't allow multiple app.exec cycles; to be safe, create new widgets and exec again.
-    # 读取 origin 的目标坐标
+    # Read origin target coordinates
     df = pd.read_csv(origin_dir / "grid_gaze_log.csv")
     orig_points = list(zip(df["target_x"], df["target_y"]))
-    # 随机选取 4 个旧点
+    # Randomly select 4 existing points
     old_selected = random.sample(orig_points, 4)
 
     def too_close(p1, p2, min_dist=50):
@@ -580,7 +580,7 @@ def main():
             continue
         new_points.append(p)
 
-    # 合并打乱
+    # Merge and shuffle
     test_points = old_selected + new_points
     random.shuffle(test_points)
 
