@@ -31,21 +31,24 @@ neural_refine/
 
 ```bash
 uv sync
+source .venv/bin/activate
 ```
 
 ## Usage
 
 ### Training
 
-Train from sim_rbf baseline:
-```bash
-python main.py --config config/cascade.yaml
-```
-
 Train from original gaze data:
 ```bash
 python main.py --checkpoint ../../checkpoints/epoch_0100.pt --config config/default.yaml
 ```
+
+Train from model based calibration sim_rbf baseline:
+```bash
+python main.py --config config/cascade.yaml
+```
+
+
 
 ### Configuration
 

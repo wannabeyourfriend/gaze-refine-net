@@ -86,21 +86,59 @@ def build_dataloaders(
     )
 
 
-def build_optimizer(model: torch.nn.Module, cfg: dict) -> torch.optim.Optimizer:
+def build_optimizer(
+    model: torch.nn.Module,
+    cfg: dict,
+) -> torch.optim.Optimizer:
+    """Build optimizer from config."""
     training_cfg = cfg["training"]
-    lr = float(training_cfg.get("learning_rate", 1e-3))
-    weight_decay = float(training_cfg.get("weight_decay", 0.0))
-    if training_cfg.get("optimizer", "adamw").lower() == "adam":
+    optimizer_type = training_cfg.get("optimizer", "adam").lower()
+    lr = training_cfg.get("learning_rate")
+    weight_decay = training_cfg.get("weight_decay", 0.0)
+
+    if optimizer_type == "adam":
         return torch.optim.Adam(
             model.parameters(),
             lr=lr,
             weight_decay=weight_decay,
         )
-    return torch.optim.AdamW(
-        model.parameters(),
-        lr=lr,
-        weight_decay=weight_decay,
-    )
+    elif optimizer_type == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
+        )
+    elif optimizer_type == "sgd":
+        momentum = training_cfg.get("momentum", 0.9)
+        return torch.optim.SGD(
+            model.parameters(),
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+        )
+    
+    raise ValueError(f"Unsupported optimizer: {optimizer_type}")
+
+
+def build_scheduler(
+    optimizer: torch.optim.Optimizer,
+    cfg: dict,
+) -> torch.optim.lr_scheduler._LRScheduler | None:
+    training_cfg = cfg["training"]
+    scheduler_type = training_cfg.get("scheduler", "none").lower()
+
+    if scheduler_type == "none":
+        return None
+
+    if scheduler_type == "cosine":
+        num_epochs = training_cfg["num_epochs"]
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=num_epochs,
+            eta_min=training_cfg.get("min_learning_rate", 1e-6),
+        )
+
+    raise ValueError(f"Unsupported scheduler: {scheduler_type}")
 
 
 def compute_loss(
@@ -355,6 +393,7 @@ def main() -> None:
 
     model = build_model(cfg["model"]).to(device)
     optimizer = build_optimizer(model, cfg)
+    scheduler = build_scheduler(optimizer, cfg)
 
     start_epoch = 1
     if args.checkpoint:
@@ -369,6 +408,10 @@ def main() -> None:
     loss_cfg = cfg.get("loss", {})
     training_cfg = cfg["training"]
     wandb = maybe_init_wandb(cfg)
+    
+    # Track best model
+    best_l2_px = float('inf')
+    best_epoch = 0
 
     for epoch in range(start_epoch, training_cfg["num_epochs"] + 1):
         tic = time.time()
@@ -388,9 +431,17 @@ def main() -> None:
             coordinate_scale=coordinate_scale,
         )
 
+        # Step the scheduler if it exists
+        if scheduler is not None:
+            scheduler.step()
+            current_lr = scheduler.get_last_lr()[0]
+        else:
+            current_lr = training_cfg.get("learning_rate", 1e-3)
+
         elapsed = time.time() - tic
         print(
             f"Epoch {epoch:03d} | "
+            f"lr={current_lr:.2e} | "
             f"train_loss={train_metrics['train_loss']:.4f} | "
             f"val_loss={val_metrics['val_loss']:.4f} | "
             f"mae_px=({val_metrics['mae_x_px']:.2f}, {val_metrics['mae_y_px']:.2f}) | "
@@ -401,16 +452,42 @@ def main() -> None:
 
         if wandb is not None:
             wandb.log(
-                {"epoch": epoch, **train_metrics, **val_metrics, "time_s": elapsed},
+                {
+                    "epoch": epoch,
+                    "learning_rate": current_lr,
+                    **train_metrics,
+                    **val_metrics,
+                    "time_s": elapsed
+                },
                 step=epoch,
             )
 
+        # Save best model based on validation l2_px
+        if val_metrics['l2_px'] < best_l2_px:
+            best_l2_px = val_metrics['l2_px']
+            best_epoch = epoch
+            ckpt_dir = resolve_path(Path(__file__).parent, training_cfg["checkpoint_dir"])
+            best_path = ckpt_dir / "best_model.pt"
+            save_checkpoint(model, optimizer, epoch, best_path)
+            print(f"  → Saved best model (l2_px={best_l2_px:.2f})")
+
+        # Regular checkpoint saving
         if epoch % training_cfg.get("checkpoint_interval", 50) == 0:
             ckpt_dir = resolve_path(Path(__file__).parent, training_cfg["checkpoint_dir"])
             ckpt_path = ckpt_dir / f"epoch_{epoch:04d}.pt"
             save_checkpoint(model, optimizer, epoch, ckpt_path)
 
     # Final test evaluation
+    print(f"\nBest model was at epoch {best_epoch} with validation l2_px={best_l2_px:.2f}")
+    
+    # Load best model for final test evaluation
+    ckpt_dir = resolve_path(Path(__file__).parent, training_cfg["checkpoint_dir"])
+    best_path = ckpt_dir / "best_model.pt"
+    if best_path.exists():
+        state = torch.load(best_path, map_location=device)
+        model.load_state_dict(state["model_state_dict"])
+        print(f"Loaded best model from {best_path}")
+    
     test_metrics = evaluate(
         model,
         test_loader,
@@ -426,7 +503,12 @@ def main() -> None:
         f"l2_px={test_metrics['l2_px']:.2f}"
     )
     if wandb is not None:
-        wandb.log({"phase": "test", **test_metrics})
+        wandb.log({
+            "phase": "test",
+            "best_epoch": best_epoch,
+            "best_val_l2_px": best_l2_px,
+            **test_metrics
+        })
         wandb.finish()
 
     # Optionally export per-split predictions to CSV.
@@ -468,4 +550,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

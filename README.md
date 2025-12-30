@@ -27,13 +27,11 @@ This project implements a hybrid approach to gaze point calibration that:
 
 See individual README files in each `apps/` subdirectory for detailed information.
 
-## Requirements
+## Hard Ware Requirements
 
-- Python 3.11+
-- PyTorch 2.9+
-- Eye tracker hardware (Pupil Labs recommended)
+- Pupil Labs
 
-## Evaluation
+## Results Evaluation
 
 ```bash
 # Evaluate initial gaze error

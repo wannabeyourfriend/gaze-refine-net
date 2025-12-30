@@ -30,7 +30,8 @@ Run the systematic calibration procedure:
 ```bash
 cd apps/model_calibration
 uv sync
-uv python systematic_drift_calibration.py
+source .venv/bin/activate
+python systematic_drift_calibration.py
 ```
 
 **Calibration Procedure:**
