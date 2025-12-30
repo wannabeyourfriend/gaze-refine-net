@@ -10,16 +10,16 @@ The model calibration system performs 18-point calibration data collection and 3
 
 ```
 model_calibration/
-├── apriltags/                          # AprilTag markers for screen positioning
-├── systematic_drift_calibration.py     # Main calibration data collection script
-├── post_processing/                    # Data analysis and model utilities
-│   ├── 2s_reaction.py                 # Reaction time analysis
-│   ├── batch_model_evaluation.py      # Statistical model comparison
-│   ├── batch_run_all_sessions.py      # Batch processing pipeline
-│   ├── build_grid_gaze_log_partial.py # Partial data extraction
+├── apriltags/                            # AprilTag markers for screen positioning
+├── systematic_drift_calibration.py       # Main calibration data collection script
+├── post_processing/                      # Data analysis and model utilities
+│   ├── 2s_reaction.py                    # Reaction time analysis
+│   ├── batch_model_evaluation.py         # Statistical model comparison
+│   ├── batch_run_all_sessions.py         # Batch processing pipeline
+│   ├── build_grid_gaze_log_partial.py    # Partial data extraction
 │   ├── calibration_model_full_compare.py # Model comparison framework
-│   └── gaze_calibration_runtime.py    # Runtime calibration for demo
-└── environment.yaml                    # Conda environment specification
+│   └── gaze_calibration_runtime.py       # Runtime calibration for demo
+└── environment.yaml                      # Conda environment specification
 ```
 
 ## Components
@@ -227,50 +227,3 @@ session_YYYYMMDD_HHMMSS/
 ├── samples_target_*.csv                # Per-target samples
 └── all_trials_model_predictions.csv    # Model comparison results
 ```
-
-## Performance
-
-Typical error reduction:
-- **Baseline (no calibration)**: ~150-200 pixels RMSE
-- **Polynomial calibration**: ~80-100 pixels RMSE
-- **simRBF calibration**: ~60-80 pixels RMSE  
-- **simRBF + Neural refinement**: ~40-60 pixels RMSE
-
-*Actual performance depends on eye tracker quality, calibration procedure, and individual user factors.*
-
-## Tips
-
-- **4-second sampling** has been validated as optimal (see `batch_run_all_sessions.py` results)
-- Ensure good lighting and minimal head movement during calibration
-- Remove glasses glare and reflections if possible
-- Calibrate with the same conditions as intended usage
-- Re-calibrate if user position or lighting changes significantly
-- Use AprilTag markers for consistent screen coordinate mapping
-
-## Dependencies
-
-- Python 3.11+
-- PyQt6 for UI
-- NumPy/SciPy for numerical processing
-- pandas for data handling
-- zmq and msgpack for Pupil Labs communication
-- OpenCV (cv2) for AprilTag detection
-
-See `environment.yaml` for complete dependency list and conda environment setup.
-
-## Troubleshooting
-
-**Poor calibration accuracy:**
-- Increase number of calibration points
-- Extend sampling duration per point
-- Check eye tracker quality and calibration
-- Verify screen coordinate mapping with AprilTags
-
-**Outlier rejection too aggressive:**
-- Adjust `OUTLIER_THRESHOLD` parameter
-- Check for systematic errors in eye tracker
-
-**Runtime calibration slow:**
-- Use `PolynomialCalibrator` for fastest prediction
-- Pre-load neural model weights to avoid initialization overhead
-- Consider caching recent predictions
