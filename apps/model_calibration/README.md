@@ -22,91 +22,6 @@ model_calibration/
 └── environment.yaml                      # Conda environment specification
 ```
 
-## Components
-
-### apriltags/
-- **Purpose**: Contains AprilTag markers for screen coordinate system calibration
-- **Usage**: Place AprilTag markers at known screen positions to establish accurate coordinate mapping
-- **Features**: 
-  - Enables precise screen position detection
-  - Supports automatic coordinate system alignment
-  - Required for accurate spatial calibration
-
-### systematic_drift_calibration.py
-- **Purpose**: Main script for systematic calibration data collection
-- **Features**:
-  - **18-point calibration**: Collects calibration data at 18 grid positions
-  - **32-point testing**: Validates calibration with 32 test positions
-  - **6×4 grid layout**: Systematic coverage of screen space
-  - **2-second wait + 4-second sampling**: Each point lights up, waits 2s for eye movement, then samples 4s of gaze data
-  - **Outlier filtering**: Removes samples with >250px distance from target
-  - **Two-pass collection**: 
-    - First pass: Collect calibration data and save to `samples_target_*.csv` and `grid_gaze_log.csv`
-    - Creates "origin" subfolder with first-pass results
-    - Second pass: User-triggered collection for validation
-- **Output**: 
-  - CSV files with timestamps, gaze coordinates, and target positions
-  - Session-organized directory structure
-
-### post_processing/
-
-#### 2s_reaction.py
-- **Purpose**: Analyzes reaction time and convergence speed
-- **Features**:
-  - Measures time for gaze to stabilize after target appears
-  - Calculates 3σ (three standard deviations) convergence threshold
-  - Statistics on time to reach final predicted position vicinity
-  - Useful for understanding visual attention latency
-
-#### batch_model_evaluation.py
-- **Purpose**: Statistical evaluation and comparison of calibration models
-- **Features**:
-  - Paired t-test implementation for model comparison
-  - Batch processing across multiple sessions
-  - Statistical significance testing
-  - Performance metric aggregation
-
-#### batch_run_all_sessions.py
-- **Purpose**: Batch processing pipeline for model fitting and data preparation
-- **Features**:
-  - Calls `calibration_model_full_compare` for batch model fitting
-  - Processes multiple calibration sessions automatically
-  - Generates `all_trials_model_predictions` files
-  - Stacks model-corrected predictions with test data for deep learning training
-  - Validates optimal sampling duration (found 4s to be best)
-  - Tests multiple time windows (1s, 2s, 3s, 4s) to demonstrate model generalizability
-  - Modifies input from `grid_gaze_log` for different time windows
-
-#### build_grid_gaze_log_partial.py
-- **Purpose**: Extracts partial time-window data for temporal analysis
-- **Features**:
-  - Creates new `grid_gaze_log_ns` files with first 1s, 2s, 3s of data
-  - Tests whether 4-second sampling produces best results
-  - Enables comparison of different sampling durations
-  - Processes data per trial from same session folder
-
-#### calibration_model_full_compare.py
-- **Purpose**: Central model comparison framework
-- **Features**:
-  - Implements multiple calibration models:
-    - **Polynomial calibration**: 2nd-order polynomial fitting
-    - **simRBF**: Simplified Radial Basis Function
-    - **simRBF + Neural refinement**: RBF with ResNet correction
-  - Processes individual trials
-  - Provides unified interface for model evaluation
-  - Compares model performance on same data
-
-#### gaze_calibration_runtime.py
-- **Purpose**: Real-time calibration service for demo game application
-- **Features**:
-  - Provides runtime calibration for `demo_game`
-  - Calls `calibration_model_full_compare` to load models
-  - Serves three model types:
-    - **PolynomialCalibrator**: Polynomial fitting model
-    - **SimRBFCalibrator**: RBF-based calibration
-    - **SimRBFWithNeuralCascadeCalibrator**: Neural-refined model
-  - Low-latency prediction for interactive applications
-
 ## Usage
 
 ### Collecting Calibration Data
@@ -114,7 +29,8 @@ model_calibration/
 Run the systematic calibration procedure:
 ```bash
 cd apps/model_calibration
-python systematic_drift_calibration.py
+uv sync
+uv python systematic_drift_calibration.py
 ```
 
 **Calibration Procedure:**
