@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-
+from pathlib import Path
 # ===== Import existing model implementations =====
 from calibration_model_full_compare import (
     fit_similarity, apply_similarity,
@@ -12,7 +12,7 @@ from calibration_model_full_compare import (
     fit_gpr_residual, apply_gpr
 )
 
-ROOT_DIR = r"C:\Users\Liu Jiaqi\Desktop\systematic_recalibration"
+ROOT_DIR = Path.home() / "Desktop" / "systematic_recalibration"
 
 # ==========================
 # Single-session processing

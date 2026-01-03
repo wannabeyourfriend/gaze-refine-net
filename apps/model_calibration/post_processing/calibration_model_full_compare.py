@@ -24,10 +24,11 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF as SK_RBF, WhiteKernel
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import Ridge
-
+from pathlib import Path
+ROOT_DIR = Path.home() / "Desktop" / "systematic_recalibration"
 # ========== User-configurable settings ==========
-ORIGIN_PATH = "C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration\\Unnamed\\2025-12-14_17-53-40\\origin\\grid_gaze_log.csv"   # If missing, will try 'data.csv' and split automatically
-TEST_PATH = "C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration\\Unnamed\\2025-12-14_17-53-40\\test\\grid_gaze_log.csv"
+ORIGIN_PATH = Path.home() / "Desktop" / "systematic_recalibration"/ "Unnamed" / "2025-12-14_17-53-40" / "origin" / "grid_gaze_log.csv"   # If missing, will try 'data.csv' and split automatically
+TEST_PATH = Path.home() / "Desktop" / "systematic_recalibration"/ "Unnamed" / "2025-12-14_17-53-40" / "test" / "grid_gaze_log.csv" 
 RBF_PARAM_GRID = [("thin_plate", 1.0), ("multiquadric", 0.0), ("multiquadric", 1.0), ("multiquadric", 2.0)]
 POLY_DEGREE = 2
 POLY_ALPHA = 0.5

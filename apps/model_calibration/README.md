@@ -28,10 +28,7 @@ model_calibration/
 
 Run the systematic calibration procedure:
 ```bash
-cd apps/model_calibration
-uv sync
-source .venv/bin/activate
-python systematic_drift_calibration.py
+python apps/model_calibration/systematic_drift_calibration.py
 ```
 
 **Calibration Procedure:**
@@ -43,14 +40,15 @@ python systematic_drift_calibration.py
    - Remove outliers (>250px from target)
 3. Data saved to session directory
 4. Original data copied to "origin" subfolder
-5. Press Enter to start second pass for validation
+5. Press Enter to start second pass for validation: System displays 32 random targets, 4 of them are from the 24 targets in the first pass and others are new.
+6. Same process as the first pass
+7. Test data copied to "test" subfolder
 
 ### Processing Collected Data
 
 #### Batch Process All Sessions
 ```bash
-cd apps/model_calibration/post_processing
-python batch_run_all_sessions.py
+python apps/model_calibration/post_processing/batch_run_all_sessions.py
 ```
 
 This will:
@@ -61,17 +59,22 @@ This will:
 
 #### Compare Models on Single Trial
 ```bash
-python calibration_model_full_compare.py --session <session_path>
+python apps/model_calibration/post_processing/calibration_model_full_compare.py
 ```
 
 #### Analyze Reaction Times
 ```bash
-python 2s_reaction.py --data <data_path>
+python apps/model_calibration/post_processing/2s_reaction.py
+```
+
+#### Build shorter log files for analysis
+```bash
+python apps/model_calibration/post_processing/build_grid_gaze_log_partial.py
 ```
 
 #### Statistical Evaluation
 ```bash
-python batch_model_evaluation.py --sessions <sessions_dir>
+python apps/model_calibration/post_processing/batch_model_evaluation.py
 ```
 
 ### Using Calibration at Runtime
@@ -120,8 +123,7 @@ Calibration data files (`grid_gaze_log.csv`, `samples_target_*.csv`) contain:
 - **Timestamp**: Millisecond-precision timing
 - **target_x, target_y**: Ground truth target coordinates (pixels)
 - **gaze_x, gaze_y**: Raw gaze coordinates from eye tracker (pixels)
-- **Session ID**: Identifier for calibration session
-- **Trial number**: Sequential trial index
+- **Target index**: Sequence of the target
 
 ## Configuration
 
@@ -136,11 +138,23 @@ Key parameters in `systematic_drift_calibration.py`:
 
 After calibration:
 ```
-session_YYYYMMDD_HHMMSS/
-├── origin/                              # First-pass data backup
-│   ├── grid_gaze_log.csv               # All calibration data
-│   └── samples_target_*.csv            # Per-target samples
-├── grid_gaze_log.csv                   # Latest calibration data
-├── samples_target_*.csv                # Per-target samples
-└── all_trials_model_predictions.csv    # Model comparison results
+Subject1/                                  # Subject
+├── YYYYMMDD_HHMMSS/                       # Timestamp
+│   ├── origin/                            # First pass
+│   │   ├── grid_gaze_log.csv              # All calibration data
+│   │   ├── samples_target_*.csv           # Per target data
+│   │   ├── samples_target_*_before.csv    # Per target data for 2s before recording
+│   │   └── ...
+│   └── test/                              # Second pass
+│       ├── grid_gaze_log.csv              
+│       ├── samples_target_*.csv           
+│       ├── samples_target_*_before.csv    
+│       └── ...
+└── YYYYMMDD_HHMMSS/                       # Another timestamp
+    ├── origin/
+    │   ├── grid_gaze_log.csv
+    │   └── ...
+    └── test/
+        ├── grid_gaze_log.csv
+        └── ...
 ```

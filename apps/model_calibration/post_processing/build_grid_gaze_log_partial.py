@@ -2,8 +2,8 @@ import os
 import re
 import numpy as np
 import pandas as pd
-
-ROOT_DIR = r"C:\Users\Liu Jiaqi\Desktop\systematic_recalibration"
+from pathlib import Path
+ROOT_DIR = Path.home() / "Desktop" / "systematic_recalibration"
 
 sample_pattern = re.compile(r"samples_target_(\d+)\.csv")
 

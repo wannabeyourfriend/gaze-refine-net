@@ -519,7 +519,8 @@ class GridTester(QWidget):
 # -----------------------
 def main():
     # -------- Participant directory setup --------
-    BASE_SAVE_DIR = Path(r"C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration")
+    BASE_SAVE_DIR = Path.home() / "Desktop" / "systematic_recalibration"
+    BASE_SAVE_DIR.mkdir(exist_ok=True)
 
     # Ask participant name
     participant_name = input("Please input the participant name: ").strip()

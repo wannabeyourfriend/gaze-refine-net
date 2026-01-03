@@ -3,9 +3,10 @@ import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 from collections import defaultdict
 
-ROOT_DIR = r"C:\\Users\\Liu Jiaqi\\Desktop\\systematic_recalibration"
+ROOT_DIR = Path.home() / "Desktop" / "systematic_recalibration"
 OUTPUT_DIR = os.path.join(ROOT_DIR, "analysis_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

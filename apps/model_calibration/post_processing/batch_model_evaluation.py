@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import numpy as np
 from glob import glob
+from pathlib import Path
 from calibration_model_full_compare import run_one_session_vertical, run_one_session_horizontal, run_one_session   # The source script must provide these functions
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -212,7 +213,7 @@ def paired_t_test(all_df_horizontal, all_df_vertical, model_A, model_B, metric="
     print("==============================================")
 
 if __name__ == "__main__":
-    root = r"C:\\Users\\SCCN\\Desktop\\New folder (2)"
+    root = Path.home() / "Desktop" / "systematic_recalibration"
     all_df_vertical, summary = evaluate_batch_vertical(root)
     # all_df_horizontal, summary = evaluate_batch_horizontal(root)
     # paired_t_test(all_df_horizontal, all_df_vertical, "sim+pwa-X", "sim+pwa-Y")
