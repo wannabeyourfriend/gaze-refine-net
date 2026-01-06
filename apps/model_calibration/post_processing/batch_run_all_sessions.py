@@ -14,6 +14,68 @@ from calibration_model_full_compare import (
 
 ROOT_DIR = Path.home() / "Desktop" / "systematic_recalibration"
 
+
+def read_samples_target_files(folder_path):
+    """
+    读取指定文件夹下的所有samples_target_*文件，返回一个字典
+    key: target_index (int)
+    value: 包含x,y列的DataFrame
+    """
+    samples_dict = {}
+    
+    # 查找文件夹中所有samples_target_*文件
+    for file_name in os.listdir(folder_path):
+        if file_name.startswith("samples_target_") and file_name.endswith(".csv"):
+            try:
+                # 提取数字部分
+                target_index = int(file_name.replace("samples_target_", "").replace(".csv", ""))
+                file_path = os.path.join(folder_path, file_name)
+                samples_df = pd.read_csv(file_path)
+                samples_dict[target_index] = samples_df
+            except (ValueError, pd.errors.EmptyDataError) as e:
+                print(f"Warning: Could not read {file_name}: {e}")
+                continue
+    
+    return samples_dict
+
+
+# 修改 create_samples_columns 函数
+def create_samples_columns(test_df, test_samples_dict):
+    """只添加test部分的samples数据"""
+    result_columns = {}
+    n_rows = len(test_df)
+    
+    # 获取test samples中最多的行数
+    max_rows = 0
+    for df in test_samples_dict.values():
+        if df is not None and len(df) > max_rows:
+            max_rows = len(df)
+    
+    print(f"Max rows in test samples files: {max_rows}")
+    
+    # 只初始化test相关的列
+    for i in range(max_rows):
+        result_columns[f"test_x_{i}"] = [np.nan] * n_rows
+        result_columns[f"test_y_{i}"] = [np.nan] * n_rows
+    
+    # 为每个target_index填充对应的test数据
+    for idx, row in test_df.iterrows():
+        target_index = row["target_index"]
+        if pd.isna(target_index):
+            continue
+            
+        target_index = int(target_index)
+        
+        # 只处理test samples
+        if target_index in test_samples_dict:
+            test_df_samples = test_samples_dict[target_index]
+            for i in range(min(len(test_df_samples), max_rows)):
+                result_columns[f"test_x_{i}"][idx] = test_df_samples.iloc[i]["x"]
+                result_columns[f"test_y_{i}"][idx] = test_df_samples.iloc[i]["y"]
+    
+    return result_columns
+
+
 # ==========================
 # Single-session processing
 # ==========================
@@ -21,6 +83,10 @@ def process_one_trial(subject, timestamp, origin_path, test_path):
     origin_df = pd.read_csv(origin_path)
     test_df   = pd.read_csv(test_path)
 
+    # 读取samples_target_*文件
+    test_dir = os.path.dirname(test_path)
+    test_samples_dict = read_samples_target_files(test_dir)
+    
     origin_obs = origin_df[['original_gaze_x','original_gaze_y']].values
     origin_tgt = origin_df[['target_x','target_y']].values
     test_obs   = test_df[['original_gaze_x','original_gaze_y']].values
@@ -87,6 +153,11 @@ def process_one_trial(subject, timestamp, origin_path, test_path):
     gpr_pred, _ = apply_gpr(test_obs, sim_pred, gpr_x, gpr_y)
     out["pred_sim_gpr_x"] = gpr_pred[:,0]
     out["pred_sim_gpr_y"] = gpr_pred[:,1]
+        
+    # 添加samples_target_*文件的数据列
+    samples_columns = create_samples_columns(test_df, test_samples_dict)
+    for col_name, values in samples_columns.items():
+        out[col_name] = values
 
     return out
 
@@ -123,7 +194,7 @@ for subject in os.listdir(ROOT_DIR):
 # Aggregate and export CSV
 # ==========================
 final_df = pd.concat(all_rows, ignore_index=True)
-out_csv = os.path.join(ROOT_DIR, "all_trials_model_predictions.csv")
+out_csv = os.path.join(ROOT_DIR, "all_trials_model_predictions_new.csv")
 final_df.to_csv(out_csv, index=False)
 
 # ==========================
@@ -175,5 +246,9 @@ for subject, g in final_df.groupby("subject"):
         print(
             f"{name:10s} | mean = {err.mean():.2f} px | var = {err.var():.2f}"
         )
+
+# 打印新增的列信息
+print("\n===== Samples columns added =====")
+samples_cols = [col for col in final_df.columns if col.startswith(('origin_x_', 'origin_y_', 'test_x_', 'test_y_'))]
 
 print("\n✅ Batch session processing complete")
