@@ -1,2 +1,0 @@
-timestamp,target_index,target_x,target_y,original_gaze_x,original_gaze_y,rbf_gaze_x,rbf_gaze_y,poly_gaze_x,poly_gaze_y,original_dx,original_dy,rbf_dx,rbf_dy,poly_dx,poly_dy,spread,n_samples
-2025-11-26T14:51:40.333,6,1215,596,1188.5966386554621,716.1176470588235,,,,,-26,120,,,,,29.86,119
