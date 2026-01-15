@@ -1,0 +1,85 @@
+# Configuration for multi-baseline ensemble training on S1 data
+# Key difference: Network learns to predict ORIGINAL -> TARGET offset
+# Instead of learning SIM_RBF -> TARGET residual
+# Input features include multiple calibration methods for the network to fuse
+
+model:
+  type: "multi_baseline"  # New mode: predict original->target using multiple baselines as features
+  input_dim: 2      # Base input: original_gaze_x, original_gaze_y
+  hidden_dims: [1024, 512]  # Deeper network to handle additional features
+  dropout: 0.15
+  coordinate_scale: 100.0  # inputs ~[0,2], residuals ~[-0.2, 0.2]
+  activation: "relu"
+
+training:
+  batch_size: 32
+  num_epochs: 300
+  learning_rate: 0.001
+  optimizer: "adamw"
+  weight_decay: 0.001
+  scheduler: "none"
+  min_learning_rate: 0.00001
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/multi_baseline_s1/"
+  early_stopping:
+    enabled: true
+    patience: 50
+    min_delta: 0.5
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/s1_for_training/train.csv"
+  val_data_path: "../../data/prepared/s1_for_training/val.csv"
+  test_data_path: "../../data/prepared/s1_for_training/test.csv"
+  num_workers: 2
+  normalize: true
+
+  # Disable SimRBF perturbation - we're not correcting sim_rbf anymore
+  sim_rbf_perturbation:
+    enabled: false
+
+  # Multiple Baseline Features
+  # Network will use these as input features to predict original->target offset
+  multi_baseline_features:
+    enabled: true
+
+    # List of baseline calibration methods to include as features
+    # Each adds 2 dimensions (x, y)
+    baselines:
+      - "sim_rbf_gaze"              # Current best: SimRBF (similarity + RBF)
+      - "pred_sim_rbf_multiquadric_s0.0"  # SimRBF with multiquadric s0.0
+      - "pred_sim_tps"              # SimRBF with thin plate spline
+      - "pred_sim_pwa"              # SimRBF with piecewise affine
+      - "pred_similarity"           # Similarity transform only
+      - "pred_poly"                 # Polynomial fitting
+      - "pred_tps"                  # Thin plate spline (no similarity)
+
+    # Normalize baseline predictions to zero mean, unit variance
+    normalize_features: true
+
+  # High-Frequency Calibration Point Features (optional)
+  high_freq_features:
+    enabled: false  # Disable for now, focus on baseline fusion
+
+  # General data augmentation
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-multi-baseline"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

@@ -15,11 +15,11 @@ import time
 from pathlib import Path
 from typing import Dict, Tuple
 
+import pandas as pd
 import torch
 import torch.nn.functional as F
 import yaml
 from torch.utils.data import DataLoader
-import pandas as pd
 
 from src.model import GazeDataset, build_model
 
@@ -41,48 +41,65 @@ def set_seed(seed: int) -> None:
 
 def build_dataloaders(
     cfg: dict, model_type: str, coordinate_scale: float
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
+) -> Tuple[DataLoader, DataLoader, DataLoader, int, int]:
+    """Build train/val/test dataloaders and return them with feature dimensions."""
     base = Path(__file__).resolve().parent
     data_cfg = cfg["data"]
+
+    augmentation_cfg = data_cfg.get("augmentation", None)
+    sim_rbf_perturbation_cfg = data_cfg.get("sim_rbf_perturbation", None)
+    high_freq_features_cfg = data_cfg.get("high_freq_features", None)
+    multi_baseline_features_cfg = data_cfg.get("multi_baseline_features", None)
 
     train_ds = GazeDataset(
         resolve_path(base, data_cfg["train_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
         model_type=model_type,
+        augmentation=augmentation_cfg,
+        sim_rbf_perturbation=sim_rbf_perturbation_cfg,
+        high_freq_features=high_freq_features_cfg,
+        multi_baseline_features=multi_baseline_features_cfg,
+        is_training=True,
     )
     val_ds = GazeDataset(
         resolve_path(base, data_cfg["val_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
         model_type=model_type,
+        augmentation=None,
+        sim_rbf_perturbation=None,
+        high_freq_features=high_freq_features_cfg,
+        multi_baseline_features=multi_baseline_features_cfg,
+        is_training=False,
     )
     test_ds = GazeDataset(
         resolve_path(base, data_cfg["test_data_path"]),
         coordinate_scale=coordinate_scale,
         normalize=data_cfg.get("normalize", True),
         model_type=model_type,
+        augmentation=None,
+        sim_rbf_perturbation=None,
+        high_freq_features=high_freq_features_cfg,
+        multi_baseline_features=multi_baseline_features_cfg,
+        is_training=False,
     )
 
+    hf_feature_dim = train_ds.hf_features.shape[1] if train_ds.hf_features is not None else 0
+    if hf_feature_dim:
+        print(f"High-frequency feature dimension: {hf_feature_dim}")
+
+    mb_feature_dim = train_ds.mb_features.shape[1] if train_ds.mb_features is not None else 0
+    if mb_feature_dim:
+        print(f"Multi-baseline feature dimension: {mb_feature_dim}")
+
+    batch_size, num_workers = cfg["training"]["batch_size"], data_cfg.get("num_workers", 0)
     return (
-        DataLoader(
-            train_ds,
-            batch_size=cfg["training"]["batch_size"],
-            shuffle=True,
-            num_workers=data_cfg.get("num_workers", 0),
-        ),
-        DataLoader(
-            val_ds,
-            batch_size=cfg["training"]["batch_size"],
-            shuffle=False,
-            num_workers=data_cfg.get("num_workers", 0),
-        ),
-        DataLoader(
-            test_ds,
-            batch_size=cfg["training"]["batch_size"],
-            shuffle=False,
-            num_workers=data_cfg.get("num_workers", 0),
-        ),
+        DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers),
+        DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers),
+        DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers),
+        hf_feature_dim,
+        mb_feature_dim,
     )
 
 
@@ -93,30 +110,16 @@ def build_optimizer(
     """Build optimizer from config."""
     training_cfg = cfg["training"]
     optimizer_type = training_cfg.get("optimizer", "adam").lower()
-    lr = training_cfg.get("learning_rate")
-    weight_decay = training_cfg.get("weight_decay", 0.0)
+    lr, weight_decay = training_cfg.get("learning_rate"), training_cfg.get("weight_decay", 0.0)
 
     if optimizer_type == "adam":
-        return torch.optim.Adam(
-            model.parameters(),
-            lr=lr,
-            weight_decay=weight_decay,
-        )
+        return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     elif optimizer_type == "adamw":
-        return torch.optim.AdamW(
-            model.parameters(),
-            lr=lr,
-            weight_decay=weight_decay,
-        )
+        return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     elif optimizer_type == "sgd":
         momentum = training_cfg.get("momentum", 0.9)
-        return torch.optim.SGD(
-            model.parameters(),
-            lr=lr,
-            momentum=momentum,
-            weight_decay=weight_decay,
-        )
-    
+        return torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+
     raise ValueError(f"Unsupported optimizer: {optimizer_type}")
 
 
@@ -132,11 +135,8 @@ def build_scheduler(
 
     if scheduler_type == "cosine":
         num_epochs = training_cfg["num_epochs"]
-        return torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=num_epochs,
-            eta_min=training_cfg.get("min_learning_rate", 1e-6),
-        )
+        eta_min = float(training_cfg.get("min_learning_rate", 1e-6))
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=eta_min)
 
     raise ValueError(f"Unsupported scheduler: {scheduler_type}")
 
@@ -147,12 +147,10 @@ def compute_loss(
     model: torch.nn.Module,
     loss_cfg: dict,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
-    mse = F.mse_loss(predictions, targets)
-    euclidean = torch.linalg.norm(predictions - targets, dim=1).mean()
+    mse, euclidean = F.mse_loss(predictions, targets), torch.linalg.norm(predictions - targets, dim=1).mean()
     reg = torch.tensor(0.0, device=predictions.device)
     if loss_cfg.get("regularization_weight", 0.0) > 0:
-        reg = sum((p ** 2).sum() for p in model.parameters())  # L2 over params
-        reg = reg / sum(p.numel() for p in model.parameters())
+        reg = sum((p ** 2).sum() for p in model.parameters()) / sum(p.numel() for p in model.parameters())
 
     total = (
         loss_cfg.get("mse_weight", 1.0) * mse
@@ -161,10 +159,10 @@ def compute_loss(
     )
 
     return total, {
-        "loss_total": float(total.detach().cpu()),
-        "loss_mse": float(mse.detach().cpu()),
-        "loss_euclidean": float(euclidean.detach().cpu()),
-        "loss_reg": float(reg.detach().cpu()),
+        "loss_total": float(total.detach()),
+        "loss_mse": float(mse.detach()),
+        "loss_euclidean": float(euclidean.detach()),
+        "loss_reg": float(reg.detach()),
     }
 
 
@@ -177,26 +175,27 @@ def train_epoch(
     grad_clip: float | None = None,
 ) -> Dict[str, float]:
     model.train()
-    running_loss = 0.0
-    batches = 0
+    running_loss, running_grad_norm, batches = 0.0, 0.0, 0
 
     for inputs, targets in loader:
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+        inputs, targets = inputs.to(device), targets.to(device)
 
         optimizer.zero_grad(set_to_none=True)
         preds = model(inputs)
         loss, _ = compute_loss(preds, targets, model, loss_cfg)
         loss.backward()
 
-        if grad_clip is not None and grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip or float('inf')).item()
         optimizer.step()
 
         running_loss += loss.item()
+        running_grad_norm += grad_norm
         batches += 1
 
-    return {"train_loss": running_loss / max(1, batches)}
+    return {
+        "train_loss": running_loss / max(1, batches),
+        "grad_norm": running_grad_norm / max(1, batches)
+    }
 
 
 @torch.no_grad()
@@ -213,18 +212,14 @@ def evaluate(
     rmse = torch.zeros(2, device=device)
     l2_mean = 0.0
 
-    # Respect dataset normalization; if inputs were already in pixels we
-    # should not rescale again.
     scale = coordinate_scale if getattr(loader.dataset, "normalize", True) else 1.0
 
     for inputs, targets in loader:
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+        inputs, targets = inputs.to(device), targets.to(device)
 
         preds = model(inputs)
         loss, _ = compute_loss(preds, targets, model, loss_cfg)
 
-        # Convert back to pixel units for interpretable metrics.
         pred_px = preds * scale
         target_px = targets * scale
         error_px = pred_px - target_px
@@ -331,12 +326,11 @@ def save_checkpoint(
     path: Path,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    torch.save({
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
-    }
-    torch.save(payload, path)
+    }, path)
 
 
 def maybe_init_wandb(cfg: dict):
@@ -361,20 +355,9 @@ def maybe_init_wandb(cfg: dict):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train neural-refine model")
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Path to YAML config file",
-    )
-    parser.add_argument(
-        "--device", type=str, default=None, help="Override device (cpu or cuda)"
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        default=None,
-        help="Optional path to a checkpoint to resume from.",
-    )
+    parser.add_argument("--config", type=str, help="Path to YAML config file")
+    parser.add_argument("--device", type=str, default=None, help="Override device (cpu or cuda)")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Optional path to a checkpoint to resume from.")
     args = parser.parse_args()
 
     cfg_path = Path(args.config).resolve()
@@ -387,11 +370,11 @@ def main() -> None:
 
     model_type = cfg["model"].get("type", "end_to_end")
     coordinate_scale = cfg["model"].get("coordinate_scale", 100.0)
-    train_loader, val_loader, test_loader = build_dataloaders(
+    train_loader, val_loader, test_loader, hf_feature_dim, mb_feature_dim = build_dataloaders(
         cfg, model_type, coordinate_scale
     )
 
-    model = build_model(cfg["model"]).to(device)
+    model = build_model(cfg["model"], hf_feature_dim=hf_feature_dim + mb_feature_dim).to(device)
     optimizer = build_optimizer(model, cfg)
     scheduler = build_scheduler(optimizer, cfg)
 
@@ -408,30 +391,16 @@ def main() -> None:
     loss_cfg = cfg.get("loss", {})
     training_cfg = cfg["training"]
     wandb = maybe_init_wandb(cfg)
-    
-    # Track best model
-    best_l2_px = float('inf')
-    best_epoch = 0
+
+    best_l2_px, best_epoch = float('inf'), 0
 
     for epoch in range(start_epoch, training_cfg["num_epochs"] + 1):
         tic = time.time()
         train_metrics = train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            device,
-            loss_cfg,
-            grad_clip=training_cfg.get("grad_clip"),
+            model, train_loader, optimizer, device, loss_cfg, grad_clip=training_cfg.get("grad_clip")
         )
-        val_metrics = evaluate(
-            model,
-            val_loader,
-            device,
-            loss_cfg,
-            coordinate_scale=coordinate_scale,
-        )
+        val_metrics = evaluate(model, val_loader, device, loss_cfg, coordinate_scale=coordinate_scale)
 
-        # Step the scheduler if it exists
         if scheduler is not None:
             scheduler.step()
             current_lr = scheduler.get_last_lr()[0]
@@ -447,6 +416,7 @@ def main() -> None:
             f"mae_px=({val_metrics['mae_x_px']:.2f}, {val_metrics['mae_y_px']:.2f}) | "
             f"rmse_px=({val_metrics['rmse_x_px']:.2f}, {val_metrics['rmse_y_px']:.2f}) | "
             f"l2_px={val_metrics['l2_px']:.2f} | "
+            f"grad_norm={train_metrics.get('grad_norm', 0):.4f} | "
             f"time={elapsed:.1f}s"
         )
 
@@ -462,7 +432,6 @@ def main() -> None:
                 step=epoch,
             )
 
-        # Save best model based on validation l2_px
         if val_metrics['l2_px'] < best_l2_px:
             best_l2_px = val_metrics['l2_px']
             best_epoch = epoch
@@ -471,30 +440,21 @@ def main() -> None:
             save_checkpoint(model, optimizer, epoch, best_path)
             print(f"  → Saved best model (l2_px={best_l2_px:.2f})")
 
-        # Regular checkpoint saving
         if epoch % training_cfg.get("checkpoint_interval", 50) == 0:
             ckpt_dir = resolve_path(Path(__file__).parent, training_cfg["checkpoint_dir"])
             ckpt_path = ckpt_dir / f"epoch_{epoch:04d}.pt"
             save_checkpoint(model, optimizer, epoch, ckpt_path)
 
-    # Final test evaluation
     print(f"\nBest model was at epoch {best_epoch} with validation l2_px={best_l2_px:.2f}")
-    
-    # Load best model for final test evaluation
+
     ckpt_dir = resolve_path(Path(__file__).parent, training_cfg["checkpoint_dir"])
     best_path = ckpt_dir / "best_model.pt"
     if best_path.exists():
         state = torch.load(best_path, map_location=device)
         model.load_state_dict(state["model_state_dict"])
         print(f"Loaded best model from {best_path}")
-    
-    test_metrics = evaluate(
-        model,
-        test_loader,
-        device,
-        loss_cfg,
-        coordinate_scale=coordinate_scale,
-    )
+
+    test_metrics = evaluate(model, test_loader, device, loss_cfg, coordinate_scale=coordinate_scale)
     print(
         "Test metrics: "
         f"loss={test_metrics['val_loss']:.4f}, "
@@ -511,41 +471,17 @@ def main() -> None:
         })
         wandb.finish()
 
-    # Optionally export per-split predictions to CSV.
     eval_cfg = cfg.get("evaluation", {})
     if eval_cfg.get("save_predictions", False):
         base_dir = resolve_path(Path(__file__).parent, eval_cfg.get("output_dir", "../../outputs"))
         print("Saving predictions to:", base_dir)
-        export_predictions(
-            "train",
-            train_loader.dataset,
-            model,
-            device,
-            coordinate_scale,
-            batch_size=training_cfg["batch_size"],
-            num_workers=cfg["data"].get("num_workers", 0),
-            output_dir=base_dir,
-        )
-        export_predictions(
-            "val",
-            val_loader.dataset,
-            model,
-            device,
-            coordinate_scale,
-            batch_size=training_cfg["batch_size"],
-            num_workers=cfg["data"].get("num_workers", 0),
-            output_dir=base_dir,
-        )
-        export_predictions(
-            "test",
-            test_loader.dataset,
-            model,
-            device,
-            coordinate_scale,
-            batch_size=training_cfg["batch_size"],
-            num_workers=cfg["data"].get("num_workers", 0),
-            output_dir=base_dir,
-        )
+        for split, dataset in [("train", train_loader.dataset), ("val", val_loader.dataset), ("test", test_loader.dataset)]:
+            export_predictions(
+                split, dataset, model, device, coordinate_scale,
+                batch_size=training_cfg["batch_size"],
+                num_workers=cfg["data"].get("num_workers", 0),
+                output_dir=base_dir,
+            )
 
 
 if __name__ == "__main__":

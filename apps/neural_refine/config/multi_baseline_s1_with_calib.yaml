@@ -1,0 +1,83 @@
+# Configuration for multi-baseline ensemble + calibration point features
+# Key improvement: Add aggregated calibration point statistics to help network
+# understand spatial error patterns
+
+model:
+  type: "multi_baseline"
+  input_dim: 2
+  hidden_dims: [512, 256]  # Larger network to handle additional features
+  dropout: 0.2             # Lower dropout for more capacity
+  coordinate_scale: 2000.0
+  activation: "relu"
+
+training:
+  batch_size: 32
+  num_epochs: 500          # More epochs for convergence
+  learning_rate: 0.001     # Lower learning rate for stability
+  optimizer: "adamw"
+  weight_decay: 0.005      # Moderate regularization
+  scheduler: "none"
+  min_learning_rate: 0.00001
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/multi_baseline_s1_with_calib/"
+  early_stopping:
+    enabled: true
+    patience: 80           # More patience
+    min_delta: 0.3         # More sensitive to small improvements
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/s1_for_training/train.csv"
+  val_data_path: "../../data/prepared/s1_for_training/val.csv"
+  test_data_path: "../../data/prepared/s1_for_training/test.csv"
+  num_workers: 2
+  normalize: true
+
+  sim_rbf_perturbation:
+    enabled: false
+
+  # Keep multi-baseline features
+  multi_baseline_features:
+    enabled: true
+    baselines:
+      - "sim_rbf_gaze"
+      - "pred_sim_rbf_multiquadric_s0.0"
+      - "pred_sim_tps"
+      - "pred_sim_pwa"
+      - "pred_similarity"
+      - "pred_poly"
+      - "pred_tps"
+    normalize_features: true
+
+  # NEW: High-frequency calibration point features
+  # This extracts statistical features from test_x_0, test_y_0, ... columns
+  high_freq_features:
+    enabled: true
+    calibration_point_prefix: "test"
+    include_statistical: true    # mean, std, min, max, median, etc.
+    include_spatial: true        # bounding box, pairwise distances, etc.
+    include_quality: true        # density, spread, consistency
+    include_relative: true       # position relative to calibration cluster
+    normalize_features: true
+
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-multi-baseline-with-calib-features"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

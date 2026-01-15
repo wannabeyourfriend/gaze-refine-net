@@ -1,160 +1,133 @@
-# Model Calibration
+# Model-Based Gaze Calibration Module
 
-This module provides comprehensive calibration infrastructure for improving eye tracking accuracy. It implements systematic data collection, multiple calibration models, and post-processing utilities for gaze point refinement.
+Traditional model-based gaze calibration methods and data collection tools for Pupil Labs eye trackers.
 
-## Overview
-
-The model calibration system performs 18-point calibration data collection and 32-point testing to evaluate and improve gaze estimation accuracy. It supports multiple calibration approaches including polynomial fitting, Radial Basis Functions (RBF), and neural network refinement.
-
-## Project Structure
+## Directory Structure
 
 ```
 model_calibration/
-├── apriltags/                            # AprilTag markers for screen positioning
-├── systematic_drift_calibration.py       # Main calibration data collection script
-├── post_processing/                      # Data analysis and model utilities
-│   ├── 2s_reaction.py                    # Reaction time analysis
-│   ├── batch_model_evaluation.py         # Statistical model comparison
-│   ├── batch_run_all_sessions.py         # Batch processing pipeline
-│   ├── build_grid_gaze_log_partial.py    # Partial data extraction
-│   ├── calibration_model_full_compare.py # Model comparison framework
-│   └── gaze_calibration_runtime.py       # Runtime calibration for demo
-└── environment.yaml                      # Conda environment specification
+├── models/                      # Calibration model implementations
+│   └── calibration_model_full_compare.py  # All calibration algorithms
+├── calibration/                 # Runtime calibration tools
+│   └── gaze_calibration_runtime.py        # Real-time SimRBF calibration
+├── analysis/                    # Batch evaluation and analysis
+│   ├── batch_run_all_sessions.py          # Process multiple sessions
+│   └── batch_model_evaluation.py          # Compare model performance
+├── scripts/                     # Utility scripts
+│   ├── reaction_time_analysis.py          # 2-second reaction analysis
+│   └── build_grid_gaze_log_partial.py     # Partial grid log builder
+├── apriltags/                   # AprilTag detection assets
+├── systematic_drift_calibration.py        # Main data collection script
+├── environment.yaml             # Conda environment specifications
+└── pyproject.toml              # Project metadata
+```
+
+## Installation
+
+```bash
+# Create conda environment
+conda env create -f environment.yaml
+conda activate gazetoword
 ```
 
 ## Usage
 
-### Collecting Calibration Data
+### Data Collection
 
-Run the systematic calibration procedure:
+Collect calibration data using a 24-point grid:
+
 ```bash
-python apps/model_calibration/systematic_drift_calibration.py
+python systematic_drift_calibration.py
 ```
 
-**Calibration Procedure:**
-1. First pass: System displays 6×4 grid of targets
-2. For each target:
-   - Target lights up
-   - Wait 2 seconds for eye movement
-   - Sample gaze data for 4 seconds
-   - Remove outliers (>250px from target)
-3. Data saved to session directory
-4. Original data copied to "origin" subfolder
-5. Press Enter to start second pass for validation: System displays 32 random targets, 4 of them are from the 24 targets in the first pass and others are new.
-6. Same process as the first pass
-7. Test data copied to "test" subfolder
-
-### Processing Collected Data
-
-#### Batch Process All Sessions
-```bash
-python apps/model_calibration/post_processing/batch_run_all_sessions.py
+This creates a structured output:
+```
+session_dir/
+├── origin/
+│   ├── grid_gaze_log.csv          # Calibration data
+│   └── samples_target_*.csv        # Raw samples per target
+└── test/
+    ├── grid_gaze_log.csv          # Test data
+    └── samples_target_*.csv        # Test samples
 ```
 
-This will:
-- Fit all calibration models to each session
-- Generate comparison statistics
-- Create training data for neural refinement
-- Validate 4-second sampling optimality
+### Runtime Calibration
 
-#### Compare Models on Single Trial
-```bash
-python apps/model_calibration/post_processing/calibration_model_full_compare.py
-```
+Apply SimRBF calibration in real-time:
 
-#### Analyze Reaction Times
-```bash
-python apps/model_calibration/post_processing/2s_reaction.py
-```
-
-#### Build shorter log files for analysis
-```bash
-python apps/model_calibration/post_processing/build_grid_gaze_log_partial.py
-```
-
-#### Statistical Evaluation
-```bash
-python apps/model_calibration/post_processing/batch_model_evaluation.py
-```
-
-### Using Calibration at Runtime
-
-For integrating calibration into applications (like demo_game):
 ```python
-from post_processing.gaze_calibration_runtime import (
-    PolynomialCalibrator,
-    SimRBFCalibrator,
-    SimRBFWithNeuralCascadeCalibrator
-)
+from model_calibration.calibration.gaze_calibration_runtime import SimRBFCalibrator
 
-# Initialize calibrator
-calibrator = SimRBFWithNeuralCascadeCalibrator(calibration_data_path)
+calibrator = SimRBFCalibrator("origin/grid_gaze_log.csv")
+corrected_gaze = calibrator.correct(raw_gaze_x, raw_gaze_y)
+```
 
-# Calibrate gaze point
-corrected_x, corrected_y = calibrator.calibrate(raw_x, raw_y)
+### Batch Analysis
+
+Process multiple sessions:
+
+```bash
+# Generate predictions for all sessions
+python analysis/batch_run_all_sessions.py
+
+# Evaluate model performance
+python analysis/batch_model_evaluation.py
 ```
 
 ## Calibration Models
 
-### 1. Polynomial Calibration
-- **Type**: Parametric model
-- **Method**: 2nd-order polynomial surface fitting
-- **Pros**: Fast, simple, generalizes well
-- **Cons**: Limited accuracy for non-linear distortions
-- **Best for**: Uniform distortion patterns
+The module implements a cascade of calibration methods:
 
-### 2. simRBF (Simplified Radial Basis Function)
-- **Type**: Non-parametric interpolation
-- **Method**: RBF kernel-based warping
-- **Pros**: Better handles local variations, higher accuracy than polynomial
-- **Cons**: Requires more calibration points, slower than polynomial
-- **Best for**: Complex, spatially-varying distortions
+1. **Similarity Transform**: Global Procrustes alignment (scale + rotation + translation)
+2. **Polynomial**: 2nd-order polynomial surface fitting
+3. **SimRBF**: Similarity + RBF residual interpolation
+   - Kernel: multiquadric
+   - Smooth: 1.0 (default)
+4. **Advanced variants**:
+   - SimTPS: Similarity + Thin Plate Spline
+   - SimGPR: Similarity + Gaussian Process Regression
+   - SimPWA: Similarity + Piecewise Affine
 
-### 3. simRBF + Neural Refinement
-- **Type**: Hybrid model (RBF + deep learning)
-- **Method**: RBF baseline with ResNet residual correction
-- **Pros**: Highest accuracy, learns systematic errors
-- **Cons**: Requires training data, computational overhead
-- **Best for**: Applications requiring maximum accuracy
+### Model Performance
 
-## Data Format
+Typical error (pixels) on 24-point calibration:
 
-Calibration data files (`grid_gaze_log.csv`, `samples_target_*.csv`) contain:
-- **Timestamp**: Millisecond-precision timing
-- **target_x, target_y**: Ground truth target coordinates (pixels)
-- **gaze_x, gaze_y**: Raw gaze coordinates from eye tracker (pixels)
-- **Target index**: Sequence of the target
+| Method | Mean Error | Description |
+|--------|-----------|-------------|
+| Original | ~100 px | Raw eye tracker output |
+| Similarity | ~60 px | Global alignment |
+| Polynomial | ~45 px | Surface fitting |
+| SimRBF | ~35 px | Recommended baseline |
 
-## Configuration
+## File Formats
 
-Key parameters in `systematic_drift_calibration.py`:
-- **GRID_SIZE**: 6×4 grid (24 total points for systematic coverage)
-- **WAIT_TIME**: 2 seconds (allows eye movement to target)
-- **SAMPLE_TIME**: 4 seconds (optimal for model fitting, validated empirically)
-- **OUTLIER_THRESHOLD**: 250 pixels (removes poor fixations)
-- **SCREEN_RESOLUTION**: Configurable for different displays
+### grid_gaze_log.csv
 
-## Output Files
+Columns:
+- `original_gaze_x`, `original_gaze_y`: Raw gaze coordinates
+- `target_x`, `target_y`: Ground truth calibration points
+- `timestamp`: Sample timestamp
+- `confidence`: Pupil Labs detection confidence
 
-After calibration:
-```
-Subject1/                                  # Subject
-├── YYYYMMDD_HHMMSS/                       # Timestamp
-│   ├── origin/                            # First pass
-│   │   ├── grid_gaze_log.csv              # All calibration data
-│   │   ├── samples_target_*.csv           # Per target data
-│   │   ├── samples_target_*_before.csv    # Per target data for 2s before recording
-│   │   └── ...
-│   └── test/                              # Second pass
-│       ├── grid_gaze_log.csv              
-│       ├── samples_target_*.csv           
-│       ├── samples_target_*_before.csv    
-│       └── ...
-└── YYYYMMDD_HHMMSS/                       # Another timestamp
-    ├── origin/
-    │   ├── grid_gaze_log.csv
-    │   └── ...
-    └── test/
-        ├── grid_gaze_log.csv
-        └── ...
-```
+### Output CSV (batch_run_all_sessions.py)
+
+Contains predictions from all calibration methods:
+- `origin_gaze_x`, `origin_gaze_y`: Original gaze
+- `pred_similarity_x`, `pred_similarity_y`: Similarity transform
+- `pred_poly_x`, `pred_poly_y`: Polynomial calibration
+- `pred_sim_rbf_*_x`, `pred_sim_rbf_*_y`: SimRBF variants
+- `target_x`, `target_y`: Ground truth
+
+## Requirements
+
+- Python 3.10
+- PyQt6 (GUI)
+- numpy, pandas, scikit-learn
+- Pupil Labs eye tracker hardware
+
+## Development Notes
+
+- All models follow scikit-learn API conventions (`fit`, `predict`, `transform`)
+- RBF smooth parameter controls regularization (higher = smoother)
+- Default RBF kernel is multiquadric for gaze calibration
+- AprilTag images are for 36h11 tag detection family

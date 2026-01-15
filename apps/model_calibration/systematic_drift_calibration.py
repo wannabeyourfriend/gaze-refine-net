@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-systematic_drift_calibration.py
-Key behavior:
-- First run: light up a 6x4 grid, wait 2s per target, sample 4s, discard samples farther than 250px, save samples_target_*.csv and grid_gaze_log.csv.
-- After the first run finishes: create an "origin" subfolder under session_dir and copy the generated CSV files there.
-- Wait for the user to press Enter, then start the second run:
-"""
+"""Systematic drift calibration with 6x4 grid sampling."""
 
 from __future__ import annotations
 import sys
@@ -35,21 +29,20 @@ except Exception:
 # If gaze_correction_rbf is available we'll import it later when needed.
 # from gaze_correction_rbf import GazeRBFCalibrator  # imported dynamically when required
 
-# ----------------- Config -----------------
-GRID_COLS = 4  
+# Config
+GRID_COLS = 4
 GRID_ROWS = 3
 DOT_RADIUS = 10
 HIGHLIGHT_RADIUS = 10
-INITIAL_WAIT_MS = 8000  # Startup wait time
+INITIAL_WAIT_MS = 8000
 APRILTAG_DIR = Path(__file__).resolve().parent / "apriltags"
 ZMQ_REQ_PORT = 50020
 
-# sampling params
-PRE_WAIT_MS = 2000   # Wait 2s after highlight
-SAMPLE_DURATION_MS = 4000  # Sample for 4s
-MAX_SAMPLE_DIST_PX = 500  # Rejection radius
+PRE_WAIT_MS = 2000
+SAMPLE_DURATION_MS = 4000
+MAX_SAMPLE_DIST_PX = 500
 
-# ------------------------------------------
+
 class EyeTrackerWorker(QObject):
     """ZMQ worker same as before"""
     gaze = pyqtSignal(int, int, bool)
@@ -88,10 +81,9 @@ class EyeTrackerWorker(QObject):
                 self.sub.setsockopt(zmq.SUBSCRIBE, t)
             self.unpacker = msgpack.Unpacker(raw=False)
 
-            # Start a QTimer that periodically invokes run_once
             self.timer = QTimer()
             self.timer.timeout.connect(self.run_once)
-            self.timer.start(5)  # Call every 5ms
+            self.timer.start(5)
 
         except Exception as e:
             print(f"EyeTrackerWorker failed to start ZMQ: {e}")
@@ -116,7 +108,6 @@ class EyeTrackerWorker(QObject):
             if not self._running:
                 break
 
-            # Only handle surface data
             if topic.startswith(self.surf_topic):
                 gos = msg.get("gaze_on_surfaces") or []
                 if not gos:
@@ -217,11 +208,8 @@ class GridTester(QWidget):
     GridTester: supports two modes:
       - origin mode (default): original collection & save into LOG_DIR
       - rbf mode: uses an external calibrator to correct mean gaze before logging
-    When creating an instance, pass:
-      - log_dir: Path to save outputs for this run
-      - rbf_calibrator: None for origin run; GazeRBFCalibrator instance for rbf run
     """
-    closed = pyqtSignal()  # Additional signal
+    closed = pyqtSignal()
     def __init__(self, log_dir: Path, rbf_calibrator=None, poly_calibration = None, custom_points=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Pupil Grid Tester")
@@ -238,8 +226,7 @@ class GridTester(QWidget):
         self.poly_calibration = poly_calibration
         self.poly_mode = (poly_calibration is not None)
         self.custom_points = custom_points
-        
-        # AprilTag images in corners if available
+
         self.corner_imgs = []
         for i in range(1, 5):
             p = APRILTAG_DIR / f"apriltags_tag36h11_0-{i}.jpeg"
@@ -255,7 +242,6 @@ class GridTester(QWidget):
             lab.raise_()
             self.corner_imgs.append(lab)
 
-        # compute grid centers (evenly distributed)
         margin = -100
         left = margin
         right = self.w - margin
@@ -267,7 +253,6 @@ class GridTester(QWidget):
         xs = [left + (right - left) * (i + 0.5) / cols for i in range(cols)]
         ys = [top + (bottom - top) * (j + 0.5) / rows for j in range(rows)]
 
-        # create dot widgets
         self.dots = []
         if custom_points is not None:
             for (cx, cy) in custom_points:
@@ -282,42 +267,33 @@ class GridTester(QWidget):
                     self.dots.append(d)
             self.add_interstitial_points()
 
-        # place apriltags
         s = 128
         self.corner_imgs[0].move(0, 0); self.corner_imgs[0].show()
         self.corner_imgs[1].move(self.w - s, 0); self.corner_imgs[1].show()
         self.corner_imgs[2].move(0, self.h - s); self.corner_imgs[2].show()
         self.corner_imgs[3].move(self.w - s, self.h - s); self.corner_imgs[3].show()
 
-        # gaze overlay
         self.gaze_overlay = GazeOverlay(self)
         self.gaze_overlay.resize(self.size())
         self.gaze_overlay.raise_()
 
-        # Eye tracker worker
         self.tracker_thread = None
         self.tracker_worker = None
         self._setup_tracker()
 
-        # logging CSV header
         with self.log_csv.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            # keep participant in header for traceability
             w.writerow(["timestamp","target_index","target_x","target_y","original_gaze_x","original_gaze_y","original_dx","original_dy","spread","n_samples"])
 
-        # experiment state
         self.untested_indices = list(range(len(self.dots)))
         random.shuffle(self.untested_indices)
         self.current_target = None
 
-        # gaze buffer for sampling
         self.gaze_buffer = deque()
         self.middle_buffer = deque()
 
-        # start after initial wait
         QTimer.singleShot(INITIAL_WAIT_MS, self._start_next_trial)
 
-        # resize timer
         self.resize_timer = QTimer(self)
         self.resize_timer.setInterval(200)
         self.resize_timer.timeout.connect(self._ensure_overlay_size)
@@ -405,7 +381,7 @@ class GridTester(QWidget):
         ym = [p[2] for p in self.middle_buffer]
 
         unfiltered = [(t, x, y) for t, x, y in zip(tm, xm, ym)]
-                      
+
         ts = [p[0] for p in self.gaze_buffer]
         xs = [p[1] for p in self.gaze_buffer]
         ys = [p[2] for p in self.gaze_buffer]
@@ -417,7 +393,6 @@ class GridTester(QWidget):
         tgt = self.dots[self.current_target]
         tx, ty = tgt.cx, tgt.cy
 
-        # filter by distance
         filtered = [(t, x, y) for t, x, y in zip(ts, xs, ys)
                     if ((x - tx)**2 + (y - ty)**2)**0.5 <= MAX_SAMPLE_DIST_PX]
         if not filtered:
@@ -430,7 +405,6 @@ class GridTester(QWidget):
 
         spread = math.sqrt(sum((x - mean_x)**2 + (y - mean_y)**2 for _, x, y in filtered) / len(filtered))
         if spread > 100 and self.custom_points is None:
-            # cleanup and next
             self.dots[self.current_target].tested = True
             self.dots[self.current_target].set_lit(False)
             self.current_target = None
@@ -444,8 +418,7 @@ class GridTester(QWidget):
 
         original_gaze_x = mean_x
         original_gaze_y = mean_y
-        
-        # save unsamples file
+
         unsamples_path = self.log_dir / f"samples_target_{self.current_target}_before.csv"
         with unsamples_path.open("w", newline="", encoding="utf-8") as fs:
             ws = csv.writer(fs)
@@ -454,7 +427,6 @@ class GridTester(QWidget):
                 ws.writerow([t, int(x), int(y)])
         print(f"✅ Saved {unsamples_path.name} with {len(unfiltered)} samples")
 
-        # save samples file
         samples_path = self.log_dir / f"samples_target_{self.current_target}.csv"
         with samples_path.open("w", newline="", encoding="utf-8") as fs:
             ws = csv.writer(fs)
@@ -463,14 +435,12 @@ class GridTester(QWidget):
                 ws.writerow([t, int(x), int(y)])
         print(f"✅ Saved {samples_path.name} with {len(filtered)} samples")
 
-        # write to main CSV
         t = datetime.now().isoformat(timespec="milliseconds")
         with self.log_csv.open("a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow([t, self.current_target, int(tx), int(ty), original_gaze_x, original_gaze_y,
                         int(original_dx), int(original_dy), round(spread, 2), len(filtered)])
 
-        # cleanup and next
         self.dots[self.current_target].tested = True
         self.dots[self.current_target].set_lit(False)
         self.current_target = None
@@ -486,11 +456,9 @@ class GridTester(QWidget):
         cols = GRID_COLS
         rows = GRID_ROWS
 
-        # Original grid center coordinates
         xs = [left + (right - left) * (i + 0.5) / cols for i in range(cols)]
         ys = [top + (bottom - top) * (j + 0.5) / rows for j in range(rows)]
 
-        # Add (rows-1)*(cols-1) midpoints
         new_points = []
         for j in range(rows - 1):
             for i in range(cols - 1):
@@ -498,7 +466,6 @@ class GridTester(QWidget):
                 cy = (ys[j] + ys[j + 1]) / 2
                 new_points.append((cx, cy))
 
-        # Create DotLabel objects and append
         for (cx, cy) in new_points:
             d = DotLabel(cx, cy, DOT_RADIUS, parent=self)
             self.dots.append(d)
@@ -514,55 +481,40 @@ class GridTester(QWidget):
         super().closeEvent(ev)
 
 
-# -----------------------
 # Main entrypoint
-# -----------------------
 def main():
-    # -------- Participant directory setup --------
     BASE_SAVE_DIR = Path.home() / "Desktop" / "systematic_recalibration"
     BASE_SAVE_DIR.mkdir(exist_ok=True)
 
-    # Ask participant name
     participant_name = input("Please input the participant name: ").strip()
     if not participant_name:
         participant_name = "Unnamed"
 
-    # Create participant folder
     participant_dir = BASE_SAVE_DIR / participant_name
     participant_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create timestamp subfolder
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     session_dir = participant_dir / timestamp
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    # Set global save path (main CSV)
     LOG_DIR = session_dir
 
     print(f"\n✅ data will be saved in: {LOG_DIR}\n")
     app = QApplication(sys.argv)
-    # Phase 1
     origin_dir = session_dir / "origin"
     origin_dir.mkdir(parents=True, exist_ok=True)
     gt1 = GridTester(log_dir=origin_dir, rbf_calibrator=None)
 
     gt1.show()
-    # run Qt app until user closes the window or it completes
     app.exec()
     del app
 
-    # After first run completes (app.exec returned)
     print("Phase 1 finished. Creating origin backup and building RBF model...")
 
-    # Wait for user to press Enter to start second run
     input("Press Enter to start the second run ...")
 
-    # Start a fresh QApplication and second GridTester
-    # Note: some platforms don't allow multiple app.exec cycles; to be safe, create new widgets and exec again.
-    # Read origin target coordinates
     df = pd.read_csv(origin_dir / "grid_gaze_log.csv")
     orig_points = list(zip(df["target_x"], df["target_y"]))
-    # Randomly select 4 existing points
     old_selected = random.sample(orig_points, 4)
 
     def too_close(p1, p2, min_dist=50):
@@ -581,7 +533,6 @@ def main():
             continue
         new_points.append(p)
 
-    # Merge and shuffle
     test_points = old_selected + new_points
     random.shuffle(test_points)
 

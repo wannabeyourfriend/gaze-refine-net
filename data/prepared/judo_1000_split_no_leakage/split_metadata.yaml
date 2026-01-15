@@ -1,0 +1,13 @@
+seed: 1047
+split_type: by_target_points
+test:
+  num_samples: 1927
+  num_target_points: 8
+total_samples: 9576
+train:
+  num_samples: 5951
+  num_target_points: 33
+unique_targets: 48
+val:
+  num_samples: 1698
+  num_target_points: 7
