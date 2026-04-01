@@ -1,4 +1,4 @@
-# GazeRefineNet: A Lightweight Neural Refinement Framework for Drift Calibration in Eye Tracking Systems
+# A Lightweight Neural Refinement Framework for Drift Calibration in Eye Tracking Systems
 
 <p align="center">
 <img src="assets/figures/Gemini_Generated_Image_kk68q3kk68q3kk68.png" width="800"/>
