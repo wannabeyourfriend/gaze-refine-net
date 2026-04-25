@@ -214,5 +214,7 @@ wandb
 
 data/raw/all/filtered_trials_summary_first_tenth.csv
 
-# Paper writing section (ICML 2026)
-light-weight-gaze-refine-icml-2026-style/
+# Paper writing section (ICML 2026 LaTeX assets only)
+light-weight-gaze-refine-icml-2026-style/*
+# But DO track the research subfolder (analysis, experiments, scripts)
+!light-weight-gaze-refine-icml-2026-style/research/

@@ -1,0 +1,45 @@
+project: gaze-refine-net-icml2026
+status: bootstrap
+research_question: >
+  Reconcile mismatches between the paper's claims and the actual codebase
+  implementation; verify reported results; strengthen the pipeline (and writing)
+  in response to ICML 2026 reviewer feedback (rejected: scores 2/3/3/3).
+
+owner: claude-opus-4-7
+created: 2026-04-25
+last_updated: 2026-04-25
+
+phase_plan:
+  - phase: P1-audit          # mismatch identification (codebase vs paper)
+    status: in_progress
+  - phase: P2-reproduce      # rerun headline numbers
+    status: pending
+  - phase: P3-fix-pipeline   # implement what paper actually claims (noise-aware, top-K selection)
+    status: pending
+  - phase: P4-new-experiments# rebuttal-promised experiments (ablations, oracle, latency, tail metrics)
+    status: pending
+  - phase: P5-novelty        # respond to "incremental" critique with stronger framing/method
+    status: pending
+  - phase: P6-rewrite        # rewrite paper sections, presentation polish
+    status: pending
+
+current_focus: P1-audit
+
+key_facts_from_paper:
+  headline_self_collected: "0.96 deg / 42.3 px mean error"
+  headline_judo: "5.8 px mean error"
+  num_baselines: "K=7 (affine, RBF, affine-RBF, poly-2,3,4) — paper text says K=7"
+  selection_M: "Top-M=4 baselines selected by per-baseline calibration risk E_k"
+  arch_claimed: "[64, 32, 16] hidden, BatchNorm, ReLU, <1ms latency"
+  noise_aware: "additive Gaussian on baseline offsets, sigma uniform [0, sigma_max]"
+
+reviewer_summary:
+  scores: [2, 3, 3, 3]   # all reject/weak-reject
+  top_concerns:
+    - novelty too thin for ICML (3 reviewers)
+    - marginal gain on custom dataset (0.96 vs 1.03)
+    - dataset too small (only 6 train subjects)
+    - missing ablations (selection / noise / K / capacity)
+    - no modern DL baselines
+    - presentation issues (eqn numbering, captions)
+    - formalization unclear (raw -> baseline -> refined relationship)
