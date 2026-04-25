@@ -31,7 +31,19 @@ the optimum heteroscedastic mean estimator under independent Gaussian noise.
 
 ## Anchor
 
-`pred_tps` (strongest classical on JuDo1000 at ~58 px L2).
+`pred_similarity` (strongest classical on the held-out is_fit=False split:
+mean 81 px L2; median 41 px). The original protocol called for `pred_tps`,
+citing "strongest classical at 58 px"; that 58 px figure includes is_fit=True
+rows (TPS interpolating its own training points to ~zero error). On the
+held-out split TPS extrapolates badly (mean 169 px, dominated by 4 subjects
+with anchor mean L2 > 200 px). Switching to `pred_similarity` gives a
+realistic comparison of shrinkage gain on a sane anchor.
+
+## Data filtering
+
+We drop is_fit=True rows before any analysis: they were used to fit the
+classical baselines and would leak the calibration set into the LOSO
+context/query partitions.
 
 ## Configuration
 
