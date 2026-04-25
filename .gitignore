@@ -213,3 +213,6 @@ wandb
 .DS_Store
 
 data/raw/all/filtered_trials_summary_first_tenth.csv
+
+# Paper writing section (ICML 2026)
+light-weight-gaze-refine-icml-2026-style/
