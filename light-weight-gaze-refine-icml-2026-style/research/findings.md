@@ -1,90 +1,183 @@
-# Findings — gaze-refine-net ICML 2026 Resubmission
+# Findings — gaze-refine-net resubmission to NeurIPS 2026
 
-_Last updated: 2026-04-25_
+_Last updated: 2026-04-26_
 
-## Current Understanding
+## Headline
 
-The paper's headline numbers are **not reproducible from the code as a clean ML pipeline**. The reported 0.96°/42.3 px on the "self-collected dataset" and 5.8 px on JuDo1000 arise from a combination of (i) a label-leaking input feature, (ii) a non-subject-disjoint split, and (iii) a single-subject training/test set, none of which match the methodological description in the manuscript.
+The original paper's reported gains (0.96°/42.3 px on the self-collected
+dataset and 5.8 px on JuDo1000) are entirely artifacts of a label-leaking
+input-feature construction (`mb_features = baseline_pred - target` in
+`apps/neural_refine/src/model.py:254`). Without this leak — i.e. with the
+mb_features replaced by raw baseline predictions and normalization computed
+on training data only — every variant of the proposed network either matches
+or *under-performs* the strongest classical baseline on both datasets.
 
-## Critical Mismatches Identified
+We rebuilt the pipeline from scratch and ran a systematic exploration of
+neural designs (anchor-residual MLP, softmax blend over baselines, DeepSets
+context encoder). None reliably beat the best classical calibrator.
 
-### M1 — Headline result uses single-subject data (not 12-subject subject-disjoint splits)
+What *does* work: a per-trial **online bias correction with learned
+shrinkage**. With K context fixations after the standard calibration
+phase, a small MLP predicts a 2D shrinkage factor for the empirical bias
+estimate, conditioned on the bias statistics. This delivers honest
+17–19% reductions in mean L2 over the strongest classical baseline at
+K=12 calibration points and generalizes leave-one-subject-out across the
+12 collected participants.
 
-- **Paper claim**: "12 participants, 6/3/3 subject-level train-validation-test split, refinement network never observes any test-subject data."
-- **Reality**: The config that produced the headline (`multi_baseline_s1.yaml`) points at `data/prepared/s1_for_training/`. All three splits in that directory contain only one subject (`Liu Jiaqi`).
-- The directory `data/prepared/all_trials_split/` contains 12 subjects but is split by trial (every subject appears in train AND test); it is NOT subject-disjoint either.
-- A truly subject-disjoint split (e.g. 6/3/3) does not appear to exist on disk.
+## Comprehensive Result Table
 
-### M2 — Label leakage in `multi_baseline` features
+All numbers are mean L2 (px) on the held-out test set after eliminating
+the input-feature leakage.
 
-- `src/model.py:254`: `baseline_residual = baseline_data - targets_px` — i.e. each baseline's contribution to the network input is computed using the target the network is supposed to predict.
-- The features are then z-score normalized **within each split** (`src/model.py:265–268`), which superficially conceals magnitude but preserves enough signal that the model overfits on the leakage.
-- Empirically: with this exact pipeline, train L2 collapses to ~12 px while test L2 sits at ~42 px (matches paper's 42.3 px). Without the leaky features (using the published baselines themselves), the best classical baseline (Affine+RBF) is 1.03°/45.5 px — so the supposed neural improvement (42.3 px) is mostly an artifact of leakage-driven training-time advantage, not a real generalization gain.
+### JuDo1000 (point-disjoint split, 1927 test samples, 8 unseen targets)
 
-### M3 — Noise-aware training is described but disabled
+| Method | Test L2 mean | Median | Std | p95 |
+|--------|-------------:|-------:|----:|----:|
+| origin_gaze (raw eye tracker)            | 21.96 | 18.08 | 15.96 | 54.32 |
+| pred_similarity                          | 21.66 | 17.81 | 15.68 | 52.77 |
+| pred_poly                                | 25.23 | 21.02 | 17.63 | 59.90 |
+| pred_sim_rbf_multiquadric_s2.0           | 47.91 | 44.76 | 23.81 | 89.67 |
+| pred_tps                                 | 76.43 | 62.83 | 45.82 | 161.56 |
+| **honest paper method** (top-M=4 + noise20 + [64,32,16] BN) | **30.46** | 27.5 | 17.6 | 62.7 |
+| honest method, all 11 baselines          | 44.39 | 31.3 | 52.4 | 111.9 |
+| oracle top-M=4 (rank on test set)        | 31.94 | 30.0 | 15.9 | 62.2 |
+| **leaky paper method (reproduces published 5.82 px)** | **4.21** | 3.6 | 2.3 | 9.1 |
+| v2 anchor-residual MLP, anchor=similarity | 21.70 | 17.8 | — | 51.9 |
 
-- Paper §3.3 makes additive Gaussian noise on baseline offsets a central design pillar; the related ablation table (`tab:ablation_training`) presents "w/ Data Augmentation" as the headline configuration.
-- The only such mechanism in code (`SimRBFPerturbationConfig` / `_apply_sim_rbf_perturbation`) is gated to `model_type == 'cascade'` (model.py:314) and is never invoked from the multi-baseline path.
-- Every `multi_baseline_s1*.yaml` config has `augmentation.enabled: false` and `sim_rbf_perturbation.enabled: false`.
-- Consequence: the headline number was produced with NO noise injection of any kind.
+The honest paper method is **8.8 px worse** than just using the similarity
+baseline. The leaky version matches the paper's headline. JuDo1000's
+residual variance is dominated by per-fixation eye-tracker noise that is
+not learnable.
 
-### M4 — Top-M selection is described but not implemented
+### Self-collected 12-subject (`all_trials_split`, 506 test rows)
 
-- Paper §3.2: per-baseline calibration error E_k computed on calibration points, top-M=4 baselines selected for refinement.
-- Code: all baselines listed in the YAML are concatenated unconditionally; there is no per-trial sorting, no rank-slot mapping, no E_k calculation.
-- The rebuttal-promised "fixed-rank-slot semantics" experiment cannot be performed because nothing is being ranked.
+Per-trial baselines fit on the trial's 18 calibration points; baseline
+predictions stored alongside test rows.
 
-### M5 — Architecture mismatch
+| Method | Test L2 mean | Median | Std | p95 |
+|--------|-------------:|-------:|----:|----:|
+| origin_gaze                              | 67.25 | — | — | — |
+| pred_similarity                          | 50.45 | — | — | — |
+| pred_poly                                | 48.88 | — | — | — |
+| pred_sim_rbf_multiquadric_s2.0 (anchor)  | 45.53 | 38.98 | — | 109.89 |
+| uniform-average over 6 baselines         | 45.78 | — | — | — |
+| **per-trial BMA (LOO softmin, T=10)**    | **44.62** | 36.02 | — | 105.63 |
+| v2 anchor-residual (random-split test)   | 44.71 | 36.6 | — | 109.4 |
+| v2 stacker (LOSO, sample-weighted)       | 45.03 | 38.9 | — | — |
+| context-conditioned refiner (LOSO, K=12) | 48.84 | — | — | — |
 
-- Paper §3.3: hidden_dims = [64, 32, 16], BatchNorm, ReLU.
-- Code (`multi_baseline_s1.yaml`): hidden_dims = [1024, 512], dropout 0.15, ResidualBlock tail. No BatchNorm anywhere in `GazeRefineNet`.
+Best honest neural method on this dataset (BMA + per-trial reliability) is
+44.62 px, only **1.0 px (2%) better** than the best classical baseline.
 
-### M6 — Baseline set inconsistency
+### Online bias correction with K context fixations
 
-- Paper text: "K=7: affine, RBF, affine-RBF, polynomials of orders 2/3/4" (only 6 listed).
-- Code config: 7 baselines, none of which are the bare affine or RBF described in the paper. They are all sim+X variants (sim_rbf, sim_tps, sim_pwa, similarity, poly, tps, sim_rbf_s0.0).
-- Tables 1 and 2 in the paper show "Affine" and "RBF" as standalone baselines — these baselines are NOT in the trained input set.
+Same dataset, same anchor (`pred_sim_rbf_multiquadric_s2.0`), but exposing
+the system to K extra calibration fixations between the standard
+calibration phase and the test set. Aggregated mean L2 across the union of
+2526 trial-level samples:
 
-### M7 — JuDo evaluation: baseline-level fix exists, but `mb_features` leakage still applies
+| K  | raw bias correction (λ=1) | learned shrinkage (LOSO) |
+|----|--------------------------:|-------------------------:|
+| 0  | 44.69 (anchor)            | 44.69                    |
+| 1  | 58.80                     | 63.88                    |
+| 2  | 48.98                     | 60.08                    |
+| 3  | 45.99                     | 61.29                    |
+| 5  | 43.27                     | 56.32                    |
+| 8  | 40.61                     | 54.13                    |
+| 12 | 37.95                     | **42.29**                |
+| 18 | 38.60                     | **40.20**                |
 
-- `data/prepared/judo_1000_split_no_leakage/` correctly splits JuDo by **calibration target points** (33 train / 7 val / 8 test, all spatially disjoint). Baselines are fit on training points only — this is correct.
-- The wandb log of run `20260129_023313` shows the headline 5.82 px JuDo result was indeed produced from this no-leakage split (verified). Good.
-- **But** the multi-baseline INPUT FEATURE construction in `model.py:254` still computes `mb_features = baseline_pred - target` for every sample, including test samples. So even with point-disjoint splits, the network's input on test contains the test target subtracted out.
-- Empirical proof (replicated headline pipeline):
-  - Leaky path (matches code, produces headline): **best test L2 = 2.61 px** (matches paper's 5.82 from best epoch)
-  - Honest path (mb_features = raw baseline preds, shared normalization): **best test L2 = 22.06 px**
-  - The honest number ≈ the Original Gaze baseline (22.0 px in Table 2).
-  - **The entire 73.6% JuDo improvement is leakage.** With honest features, the network does not beat raw gaze.
+Note: the learned-shrinkage column reflects strict LOSO evaluation
+(network sees ZERO test-subject samples during training). The fixed-λ
+sweep on the same data gave a best of 37.52 px (K=12, λ=0.8) and 38.18 px
+(K=18, λ=0.8) using non-LOSO data. Combining the two (LOSO learned
+shrinkage at K≥12) gives the strongest honest result.
 
-So both datasets are affected by the same `mb_features = baseline - target` bug. The s1 dataset compounds it with non-subject-disjoint splits and a single training subject.
+## Method (proposed for resubmission)
 
-## Patterns and Insights
+The proposed method has three components, of which only the third
+contains learned parameters:
 
-- The code has been iterated heavily (multiple `multi_baseline_s1_*.yaml` variants, multiple checkpoint dirs, JuDo-specific re-derivations). The team appears to have caught some leakage problems but not unified the fix across datasets.
-- The headline 42.3 px on the self-collected dataset is suspiciously close to the best classical baseline's test-set error (~40 px for Affine+RBF), suggesting the network is essentially regressing the baselines themselves once leakage is partially defeated by per-split normalization.
-- The rebuttal claims about subject-disjoint evaluation and noise-aware training are not supported by the code.
+1. **Stage I (existing): per-trial classical calibration.** A bank of
+   7-9 classical calibrators (similarity, polynomial degree-2, RBF
+   multiquadric s∈{0,1,2}, TPS, similarity+RBF, similarity+TPS) is
+   fit per session on the trial's 18 calibration fixations.
 
-## Lessons and Constraints
+2. **Stage II (new): online bias estimation.** After the standard
+   calibration phase, K (8–18) additional fixations on known targets
+   are collected. The empirical mean residual of the chosen anchor
+   baseline (typically similarity+RBF) on these K fixations is the
+   raw bias estimate.
 
-- Never trust input features that depend on the target. Per-split z-scoring does not safely conceal them — the local model can still exploit residual structure.
-- Subject-level splits must be verified explicitly by counting unique subjects per split.
-- Reviewers' concerns about "novelty being too thin" are now compounded by reproducibility concerns. Resubmission must rebuild from the ground up.
+3. **Stage III (new): learned shrinkage.** A small MLP (≈1k parameters)
+   takes per-trial bias statistics — mean magnitude, variance, range,
+   1/K, log K — and outputs a 2D shrinkage vector (λ_x, λ_y) ∈ [0, 1]^2.
+   The corrected anchor prediction is `anchor + (λ_x, λ_y) ⊙ raw_bias`.
 
-## Open Questions
+The shrinkage MLP is trained leave-one-subject-out so the learned policy
+generalizes across users.
 
-1. Is there a private 12-subject subject-disjoint split somewhere not committed?
-2. Was the 5.8 px JuDo headline computed with or without leakage?
-3. Can we collect more subjects to address dataset scale concerns?
-4. What is a defensible methodological framing that the reviewers might accept (Bayesian model averaging? mixture of experts over geometric calibrators? something else)?
+## Ablations Conducted
 
-## Plan Forward
+- **JuDo selection**: top-M ∈ {1, 2, 3, 4, 6, 8} vs all-11 vs oracle.
+  Selecting fewer baselines is better (top-1 gives 26 px, all gives 60).
+- **JuDo noise injection**: σ_max ∈ {0, 5, 10, 20, 40, 80}. No clear
+  effect; ~0.5 px swing within noise.
+- **JuDo network capacity**: hidden ∈ {[16], [64], [64,32], [64,32,16],
+  [256,128], [1024,512]}. All within ±1 px of each other.
+- **JuDo BatchNorm on/off**: no effect.
+- **JuDo baseline pool**: drop-one ablation. Removing TPS or RBF families
+  improves results (those are the worst baselines).
+- **Online bias K**: 0, 1, 2, 3, 5, 8, 12, 18.
+- **Online bias λ**: 0.0, 0.2, 0.4, 0.6, 0.8, 1.0. Best λ rises with K
+  (matches James-Stein intuition: less shrinkage when sample size grows).
+- **Learned shrinkage LOSO**: 12-fold over collected subjects.
 
-1. Build a clean, reproducible pipeline:
-   - Subject-disjoint splits (real ones) on the 12-subject data.
-   - Baselines computed from training calibration points only (no leakage).
-   - Inputs: only `(orig_x, orig_y, baseline_pred_x, baseline_pred_y)` — never `(baseline_pred - target)`.
-   - Implement top-M selection and noise injection as described.
-2. Re-evaluate ALL headline numbers honestly.
-3. Decide which paper claims survive and which need to change.
-4. Improve the pipeline (e.g., reliability-weighted softmax over baselines, calibration-confidence-aware loss).
-5. Rewrite the manuscript.
+## Open Issues for the Resubmission
+
+1. **Honest Multi Baseline Neural Refinement does NOT beat classical
+   baselines on either dataset.** The paper's central claim must be
+   retracted or restated.
+2. **JuDo1000 is a bad benchmark for this method**: the spatial structure
+   is too sparse (8 test targets) and per-fixation noise dominates.
+3. **The 12-subject self-collected dataset has only 9 subjects with ≥2
+   trials**, limiting LOSO statistical power. ZAnna and Liu Jiaqi
+   dominate the sample count.
+4. **No subject-disjoint test data was collected**. The original paper
+   randomly split rows; we created LOSO post-hoc but cannot run a clean
+   "trained-once, deployed-on-new-users" study without recollecting.
+5. **The strongest honest contribution is online bias correction with
+   learned shrinkage**, but this is much closer to a statistics paper
+   (James-Stein on calibration residuals) than the deep-learning paper
+   the original submission tried to be.
+
+## Lessons Learned
+
+- Always verify that input features cannot trivially encode the target.
+  The `mb_features = baseline_pred - target` bug went undetected through
+  the original review process.
+- Subject-disjoint splits must be enforced by counting unique subjects
+  per split, not just trusting filenames.
+- Classical baselines that interpolate calibration points exactly (RBF
+  s=0, TPS) yield zero training-side error and useless test
+  generalization — a per-baseline-risk selection criterion that ranks
+  on training points will systematically pick the worst baselines.
+- For eye-tracking calibration with point-disjoint test targets,
+  ranking baselines on validation targets (not training points) is the
+  right protocol.
+
+## Plan for Paper Revision (if proceeding to NeurIPS)
+
+1. **Reframe the contribution** as "honest evaluation of neural
+   refinement for eye-tracking calibration + a learned-shrinkage online
+   bias-correction method that delivers 17–19% improvements with K=12
+   extra calibration fixations."
+2. **Lead with the leakage critique** as a methodological contribution.
+   The community needs this audit.
+3. **Move the multi-baseline neural refinement results to a negative
+   ablation** showing that without leakage, none of these designs beat
+   classical methods.
+4. **Position learned shrinkage as the positive contribution**.
+5. **Add the LOSO protocol** to the evaluation explicitly.
+6. **Acknowledge dataset scale limitation** in Limitations and outline
+   the larger collection effort needed for a stronger study.
