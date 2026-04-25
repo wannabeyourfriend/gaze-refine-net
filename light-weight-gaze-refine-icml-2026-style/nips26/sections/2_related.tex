@@ -1,0 +1,50 @@
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Classical calibration of head-mounted eye trackers.}
+Linear and affine transforms~\citep{vadillo2015simple} provide a
+closed-form baseline. Polynomial regression has been the workhorse for a
+decade~\citep{cerrolaza2012polynomial,mardanbegi2018distribution}, with
+quadratic forms repeatedly identified as the best
+trade-off~\citep{ehinger2019eyelink,su2020locally}. Non-parametric
+methods --- thin-plate spline, radial basis function with
+multi-quadric kernels~\citep{scheel2016rbf}, and Gaussian process
+regression~\citep{tripathi2017gpr} --- relax the global-parametric
+assumption and capture local variation. In practice, a hybrid
+\emph{similarity + RBF} (sim+RBF), in which a global affine fit is
+followed by an RBF interpolation on the residual, is the
+strongest single classical baseline on both JuDo1000 and our
+self-collected data (see Section~\ref{sec:experiments}).
+
+\paragraph{Neural and residual-based refinement.}
+Several recent works augment classical pipelines with neural networks.
+\citet{huang2025fgd} apply feature-guided de-drifting on EOG signals;
+\citet{wang2017blind} learn a projection-recovery network for sensor
+networks; \citet{thieu2025stochastic} use extended Kalman filtering for
+gaze trajectory smoothing. The recent ``Multi Baseline Neural
+Refinement'' approach we audit \citep{anon2026mbnr} feeds the
+predictions of $K=7$ classical baselines into a $[64,32,16]$ MLP with
+batch normalization and Gaussian noise injection, and reports
+state-of-the-art accuracy on JuDo1000 and a self-collected dataset.
+We show that the reported numbers depend on a single line of input-feature
+construction that subtracts the regression target.
+
+\paragraph{Online and implicit recalibration.}
+Implicit calibration methods exploit natural viewing behaviour to keep
+calibration current without explicit user
+intervention~\citep{huang2019saccalib,muller2019mobile,wan2024selfcalib}.
+Explicit short recalibration~\citep{lander2016time,hou2025xr} re-collects
+a small number of fixations to refresh accuracy. Our online
+shrinkage estimator falls into the explicit-but-very-short category,
+collecting $K \le 18$ extra fixations.
+
+\paragraph{Shrinkage estimation.}
+Shrinking an empirical estimator toward a fixed target reduces variance
+at the cost of a small bias and is well-studied in
+statistics~\citep{james1961estimation,efron1977stein,ledoit2004wellconditioned}.
+Our learned shrinkage MLP can be viewed as a non-parametric
+generalization of a James-Stein estimator: instead of choosing a single
+shrinkage scalar from theory, we predict a per-trial 2-D shrinkage from
+sample statistics. The per-trial nature is central --- the bias varies
+substantially across sessions, and the optimal $\lambda$ varies with
+the noise level of the empirical mean, which depends on $K$.

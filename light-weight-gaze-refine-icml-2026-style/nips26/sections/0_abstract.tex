@@ -1,0 +1,24 @@
+\begin{abstract}
+Drift calibration in head-mounted eye tracking is dominated by parametric
+classical methods (similarity, polynomial, RBF, and combinations) fit per
+session on a small set of fixation points. A recent line of work proposes
+to refine the resulting predictions with a lightweight neural network that
+ingests the predictions of multiple classical baselines and outputs an
+adaptive correction. We replicate one such pipeline and find that the
+reported gains arise entirely from a single line of code that subtracts the
+regression target from the network's input feature, a leakage that
+silently inflates the published numbers (e.g.\ from a corrected $30.5$~px
+on JuDo1000 to the published $5.8$~px). After re-evaluating every variant
+of the proposed design under an honest pipeline, we find that no neural
+ensemble of classical calibrators reliably improves on the strongest
+classical baseline alone. We then propose a simple alternative: after the
+standard calibration phase, collect $K$ extra fixations as an
+\emph{online recalibration context}, estimate the per-trial mean residual,
+and shrink it by a coefficient $\lambda \in [0,1]^2$ predicted by a
+$\sim$1k-parameter MLP from per-trial bias statistics (mean magnitude,
+variance, $K$). Trained leave-one-subject-out on twelve participants and
+evaluated on a thirteenth, our shrinkage estimator reduces mean L2 error
+by $17\%$ at $K=12$ over the strongest classical baseline and $7\%$ over
+the best globally-tuned fixed shrinkage. We release all code, data
+splits, and per-experiment results.
+\end{abstract}

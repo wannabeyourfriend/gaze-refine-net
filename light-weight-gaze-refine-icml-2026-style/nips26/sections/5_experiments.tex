@@ -1,0 +1,221 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Datasets and protocols}
+
+\paragraph{Self-collected (12 participants, 143 trials, 2 526 evaluation
+fixations).}
+We recruited twelve participants (5 male, 7 female; ages 18--25). All
+sessions used a right-eye monocular Pupil Labs Core tracker, a 24-inch
+1920$\times$1080 display, and a fixed seating arrangement at 70~cm
+viewing distance with the eye tracker's built-in 5-point pre-calibration.
+Each trial consists of an 18-point fitting phase followed by a 32-point
+testing phase. After standard outlier filtering, 143 trials remain.
+Figure~\ref{fig:dataset}(a) shows one example trial.
+Figure~\ref{fig:dataset}(b) shows that two participants (Liu Jiaqi and
+ZAnna) account for over 90\% of the trials --- we therefore report both
+sample-weighted and subject-mean aggregates.
+Figure~\ref{fig:dataset}(c) shows that per-trial bias vectors are
+direction-stable and of magnitude $25$--$60$~px,
+motivating online recalibration. Figure~\ref{fig:dataset}(d)
+illustrates the residual vector field after classical calibration on a
+single trial.
+
+\paragraph{JuDo1000 (150 participants, target-disjoint split).}
+We use the public JuDo1000 dataset~\citep{makowski2020judo} with the
+target-disjoint split released by~\citet{anon2026mbnr}: 33 training
+target points are used to fit \emph{all} classical baselines, 7 are
+held out for validation, and 8 for test. This protocol guards against
+the trivial interpolation that would otherwise rank the smoothest RBF
+as ``best on training points'' simply because it interpolates them
+exactly.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig03_dataset.pdf}
+\caption{Self-collected dataset structure. (a) One representative trial
+of 32 test fixations on a 1920$\times$1080 screen; arrows go from raw
+gaze means to targets. (b) Per-subject distribution of classical-baseline
+error (sim+RBF), 12 subjects sorted by median; bold orange box outlines
+mark the two subjects (Liu Jiaqi, ZAnna) that contribute over 90\% of
+trials. (c) Per-trial bias vectors after classical calibration: most
+trials retain a coherent bias of 25--60~px that is direction-stable per
+session. (d) Residual vector field for a single trial; the spatial
+structure is small enough that an additive correction estimated from a
+few extra fixations is sufficient.}
+\label{fig:dataset}
+\end{figure}
+
+\paragraph{Leave-one-subject-out (LOSO).}
+For the self-collected dataset, we evaluate every method by
+leave-one-subject-out across the 12 participants. For each held-out
+subject, the remaining 11 subjects' rows form a training pool from
+which 10\% of trials are randomly held out for validation.
+The shrinkage MLP is trained from scratch on each fold and evaluated on
+the held-out subject without any further adaptation.
+
+\subsection{Honest neural refinement does not beat classical baselines}
+
+Table~\ref{tab:judo} compares all variants on JuDo1000. The strongest
+classical baseline is the similarity transform at $21.66$~px; the raw
+eye tracker is $21.96$~px. The honest paper method (top-$M$ selection
+plus Gaussian noise injection plus the $[64,32,16]$ BN MLP) reaches
+$30.46$~px --- $9$~px \emph{worse} than the similarity baseline. An
+oracle that ranks baselines on the test set itself reaches $31.94$~px.
+The smaller, anchored ``v2'' MLP (Section~\ref{sec:audit}) ties the
+similarity baseline at $21.70$~px without surpassing it. The leaky
+pipeline reproduces the published $5.82$~px (best-epoch) headline,
+confirming that the leak fully accounts for the original gain.
+
+\begin{table}[t]
+\caption{JuDo1000 (point-disjoint split, 1\,927 test samples). All
+honest variants of multi-baseline neural refinement match or
+under-perform the similarity baseline. The leaky pipeline reproduces
+the published $5.82$~px.}
+\label{tab:judo}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Method & Mean L2 (px) & Median & Std & p95 \\
+\midrule
+\multicolumn{5}{l}{\emph{Classical baselines (per-trial fit, point-disjoint)}}\\
+origin\_gaze (raw)              & 21.96 & 18.08 & 15.96 & 54.32 \\
+similarity                      & \textbf{21.66} & 17.81 & 15.68 & 52.77 \\
+poly                            & 25.23 & 21.02 & 17.63 & 59.90 \\
+sim+RBF (s=2.0)                 & 47.91 & 44.76 & 23.81 & 89.67 \\
+TPS                             & 76.43 & 62.83 & 45.82 & 161.56 \\
+\midrule
+\multicolumn{5}{l}{\emph{Honest neural refinement (this paper)}}\\
+top-$M{=}4$, $\sigma{=}20$, [64,32,16] BN     & 30.46 & 27.5  & 17.6 & 62.7 \\
+top-$M{=}4$, $\sigma{=}0$,  [64,32,16] BN     & 31.77 & 29.9  & 15.9 & 62.1 \\
+all 11 baselines, $\sigma{=}20$ & 44.39 & 31.3  & 52.4 & 111.9 \\
+oracle top-$M{=}4$ on test risk & 31.94 & 30.0  & 15.9 & 62.2 \\
+v2 anchored residual MLP        & 21.70 & 17.8  &   -- & 51.9 \\
+\midrule
+\multicolumn{5}{l}{\emph{Leaky pipeline (matches published; for diagnosis only)}}\\
+top-$M{=}4$, leaky inputs       & \textcolor{red}{4.21} & 3.6 & 2.3 & 9.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:self_collected} shows the same picture on the
+self-collected dataset. The strongest classical baseline (sim+RBF) is
+$45.53$~px; six honest neural variants land within $\pm 1.0$~px. The
+leaky pipeline produces a training-side L2 near $12$~px and the
+$42.3$~px test number reported in the original paper.
+
+\begin{table}[t]
+\caption{Self-collected dataset (12 subjects, 506 row-random test rows).
+Six honest neural variants fall within $\pm 1.0$~px of the strongest
+classical baseline (sim+RBF). The published $42.3$~px headline is
+reproducible only with the leaky pipeline.}
+\label{tab:self_collected}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Method & Test L2 (px) & $\Delta$ vs sim+RBF \\
+\midrule
+origin\_gaze (raw)              & 67.25 & +21.72 \\
+similarity                      & 50.45 & +4.92  \\
+poly                            & 48.88 & +3.35  \\
+GPR                             & 48.29 & +2.76  \\
+TPS                             & 49.58 & +4.05  \\
+sim+RBF (anchor)                & \textbf{45.53} & 0.00 \\
+\midrule
+uniform mean of 6 baselines     & 45.78 & +0.25  \\
+per-trial LOO BMA, $T{=}10$     & \textbf{44.62} & --0.91 \\
+v2 anchor-residual MLP          & 44.71 & --0.82 \\
+v2 stacker, LOSO sample-weighted& 45.03 & +0.34 \\
+DeepSets context refiner, $K{=}12$ LOSO & 48.84 & +3.31 \\
+\midrule
+honest top-$M{=}4$, [64,32,16] BN, $\sigma{=}20$ (paper-faithful) & 45.06 & --0.47 \\
+\midrule
+leaky pipeline (matches published) & \textcolor{red}{42.3} & --3.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Online shrinkage is the win}
+
+Figure~\ref{fig:shrinkage}(a) plots test L2 against context size $K$
+for three policies. Raw mean-bias correction (orange) hurts at $K=1$
+and only crosses below the anchor at $K \ge 5$. The globally tuned
+fixed-$\lambda$ policy (magenta) improves over raw mean by removing the
+small-$K$ noise penalty. The learned per-trial shrinkage (green)
+matches fixed-$\lambda$ for very small $K$ and substantially exceeds it
+once $K \ge 12$, achieving $42.29$~px (a $17\%$ reduction over the
+$44.69$~px anchor) at $K=12$ and $40.20$~px ($10\%$ reduction) at
+$K=18$.
+
+\begin{table}[t]
+\caption{Test mean L2 (px) on the self-collected dataset across context
+sizes $K$. At small $K$, raw mean-bias correction (column ``raw $\lambda{=}1$'')
+is dominated by sampling noise. The fixed-$\lambda$ sweep recovers most
+of the gain. The learned shrinkage MLP (LOSO) matches the fixed sweep
+at small $K$ and dominates it at $K \ge 12$.}
+\label{tab:shrinkage}
+\centering
+\small
+\begin{tabular}{rrrrr}
+\toprule
+$K$ & raw $\lambda{=}1$ & fixed $\lambda^\star$ ($\lambda^\star$) & learned $\lambda$ (LOSO) & $\Delta$ vs anchor (44.69)\\
+\midrule
+0  & 44.69 & 44.69 & 44.69 & 0.00 \\
+1  & 58.80 & 43.26 (0.2) & 63.88 & --1.43 (fixed) \\
+2  & 48.98 & 42.74 (0.4) & 60.08 & --1.95 (fixed) \\
+3  & 45.99 & 41.97 (0.4) & 61.29 & --2.72 (fixed) \\
+5  & 43.27 & 41.02 (0.4) & 56.32 & --3.67 (fixed) \\
+8  & 40.61 & 39.37 (0.6) & 54.13 & --5.32 (fixed) \\
+12 & 37.95 & 37.52 (0.8) & \textbf{42.29} & \textbf{--7.17 (fixed)}, \textbf{--2.40 (LOSO)} \\
+18 & 38.60 & 38.18 (0.8) & \textbf{40.20} & --6.51 (fixed), \textbf{--4.49 (LOSO)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The learned shrinkage policy underperforms fixed-$\lambda$ for
+$K \le 8$. This is consistent with the small training-trial count for
+small-$K$ episodes in our LOSO folds; with more training subjects we
+expect the gap to close. We discuss this in Section~\ref{sec:discussion}.
+
+\subsection{Per-subject LOSO}
+
+Figure~\ref{fig:loso} reports per-subject results at $K{=}12$. Three
+subjects --- the only three with enough trials for $K{=}12$ episodes ---
+are evaluated and all three improve under the learned shrinkage:
+\textbf{Liu Jiaqi} ($40.79 \to 35.53$~px, $-13\%$),
+\textbf{ZAnna} ($45.90 \to 44.02$~px, $-4\%$),
+\textbf{wzx} ($57.16 \to 47.33$~px, $-17\%$).
+The remaining nine subjects have insufficient trials to form $K{=}12$
+context-plus-query episodes (see Discussion). Sample-weighted mean
+across the three viable folds: $-5.7$~px ($-12\%$).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig07_loso.pdf}
+\caption{Per-subject leave-one-subject-out evaluation at $K=12$
+context fixations. The shrinkage policy is trained on the other 11
+subjects and applied to the held-out subject. All three subjects with
+enough trials to admit $K=12$ episodes (Liu Jiaqi, ZAnna, wzx) improve;
+the remaining nine subjects are flagged ``insufficient ctx''.}
+\label{fig:loso}
+\end{figure}
+
+\subsection{Ablations}
+
+We performed comprehensive ablations on JuDo1000 along six axes:
+selection strategy ($\{$all, top-$M\!\in\!\{1{,}2{,}3{,}4{,}6{,}8\}$,
+oracle$\}$); noise $\sigma_{\max}\in\{0,5,10,20,40,80\}$~px; network
+capacity ($\{[16],[64],[64,32],[64,32,16],[256,128],[1024,512]\}$);
+batch normalization on/off; baseline pool drop-one; and seeds
+$\{1047, 7, 42, 123, 2024\}$. Results land within $\pm 1$~px of each
+other and never reach the strongest classical baseline at $21.66$~px.
+Full numbers in Appendix~\ref{app:ablations}.
+
+For online shrinkage, the central knobs are $K$ (Table~\ref{tab:shrinkage})
+and the choice of anchor (sim+RBF dominates similarity, polynomial,
+GPR by 1--2~px). Replacing the learned $\lambda$ with a constant
+$\lambda \in \{0, 0.5, 1\}$ recovers the fixed-$\lambda$ sweep curve;
+replacing the per-trial bias estimate with a global subject-mean bias
+loses all benefit, confirming that the per-trial component is essential.

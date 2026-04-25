@@ -1,0 +1,100 @@
+\section{Online per-trial shrinkage}
+\label{sec:method}
+
+\paragraph{Setup.}
+After the standard 18-point calibration phase, the user is shown $K$
+extra targets and the eye tracker records the corresponding raw gaze
+estimates $\{(\tilde p_j, p_j^\star)\}_{j=1}^K$. The classical
+\emph{anchor} baseline (sim+RBF in our experiments) produces predictions
+$\hat{a}_j = g_{\rm anchor}(\tilde p_j)$. The empirical per-trial bias
+estimate from these $K$ samples is
+\begin{equation}
+\bar{b}_K \;=\; \frac{1}{K} \sum_{j=1}^{K} \big(p_j^\star - \hat{a}_j\big)
+\;\in\; \mathbb{R}^2.
+\label{eq:emp-bias}
+\end{equation}
+At test time, given a new raw gaze estimate $p$ and its anchor prediction
+$a = g_{\rm anchor}(p)$, the corrected prediction is
+\begin{equation}
+\hat{p}_{\rm refined} \;=\; a \;+\; \boldsymbol{\lambda} \odot \bar{b}_K,
+\label{eq:correction}
+\end{equation}
+where $\boldsymbol{\lambda} = (\lambda_x, \lambda_y) \in [0, 1]^2$ is a
+shrinkage coefficient and $\odot$ is the element-wise product.
+$\boldsymbol{\lambda} = \boldsymbol{1}$ corresponds to subtracting the raw
+empirical bias; $\boldsymbol{\lambda} = \boldsymbol{0}$ recovers the
+classical anchor.
+
+\paragraph{Why shrinkage is necessary.}
+At small $K$, the variance of $\bar{b}_K$ is large relative to its mean,
+and using it raw inflates error rather than reducing it. On our
+self-collected data, raw mean-bias correction at $K = 1$ yields $58.8$~px
+versus $44.7$~px for the anchor alone (Figure~\ref{fig:shrinkage}a, orange
+line). Sweeping a single global $\lambda$ per $K$ gives clear
+improvements: the optimal $\lambda$ rises monotonically from $0.2$ at
+$K=1$ to $0.8$ at $K=18$, exactly the James-Stein pattern of less
+shrinkage as the empirical mean becomes more reliable
+(Figure~\ref{fig:shrinkage}b). However, a global $\lambda$ ignores
+trial-specific reliability cues such as the variability of the bias
+samples and their absolute magnitude.
+
+\paragraph{Learned per-trial shrinkage.}
+We train a small MLP to predict $\boldsymbol{\lambda}$ from per-trial bias
+statistics. The features are:
+\begin{equation}
+\phi(K, \bar{b}_K, S_K) = \big[
+\bar{b}_K / 50,\;
+\log(1 + |\bar{b}_K| / 10),\;
+S_K / 100,\;
+\log(1 + S_K / 10),\;
+{\rm range}_K / 100,\;
+1/K,\;
+\log K
+\big],
+\label{eq:features}
+\end{equation}
+where $S_K = \mathrm{Var}_j(\hat{a}_j - p_j^\star)$ is the per-coordinate
+sample variance and ${\rm range}_K$ is the per-coordinate sample range.
+The MLP has two hidden layers of width 32 with LayerNorm and GELU
+activations, and outputs $\boldsymbol{\lambda} = \sigma(W_2 h)$ via a
+sigmoid head initialized at zero (so an untrained model emits
+$\boldsymbol{\lambda} = 0.5$). Total parameter count: $\approx 1\,200$.
+
+\paragraph{Training.}
+We train per leave-one-subject-out (LOSO) fold. Within each training
+fold, we form mini-batches of episodes: each episode is a random
+$(K, K')$ split of one trial's evaluation samples into a context of
+size $K$ and a query of size $K'$. The loss on a single episode is
+\begin{equation}
+\mathcal{L} \;=\; \frac{1}{K'} \sum_{j=1}^{K'}
+\big\| (p_j^\star - \hat{a}_j) - \boldsymbol{\lambda}(K, \bar{b}_K, S_K) \odot \bar{b}_K \big\|_2^2
+\label{eq:loss}
+\end{equation}
+where $\bar{b}_K, S_K$ are computed from the context. We optimize with
+AdamW (lr $3 \times 10^{-3}$, weight decay $10^{-3}$) for $80$ epochs,
+selecting the best checkpoint on a held-out validation episode pool.
+
+\paragraph{Deployment.}
+At inference time, the user contributes $K$ extra fixations after the
+standard calibration; $\bar{b}_K$ and $S_K$ are computed and passed
+through $\phi$ and the MLP to obtain $\boldsymbol{\lambda}$. The
+corrected prediction is given by \eqref{eq:correction}. The MLP is
+trained once across the available training subjects and frozen
+thereafter; no per-user training is required.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig04_shrinkage.pdf}
+\caption{Online bias correction with learned shrinkage. (a) Test mean
+L2 on the self-collected dataset as a function of context size $K$.
+Grey dashed: anchor classical baseline (sim+RBF, $K=0$). Orange: raw
+mean-bias correction ($\boldsymbol{\lambda}=\boldsymbol{1}$) --- at small
+$K$ the empirical mean is noisier than the baseline. Magenta:
+globally tuned fixed $\lambda$ per $K$. Green: per-trial learned
+shrinkage from a $\sim$1\,200-parameter MLP, evaluated leave-one-subject
+out. At $K=12$ the learned policy reduces L2 by $17\%$ over the anchor.
+(b) Heatmap of fixed-$\lambda$ test L2 over $(K, \lambda)$; red stars
+mark the optimum per row. Optimal $\lambda$ rises monotonically with $K$,
+the James-Stein pattern.}
+\label{fig:shrinkage}
+\end{figure}

@@ -1,0 +1,143 @@
+\section{Reproducibility checklist details}
+
+The exact diff that fixes the leakage in
+\texttt{apps/neural\_refine/src/model.py} is:
+\begin{verbatim}
+- baseline_residual = baseline_data - targets_px
++ baseline_residual = baseline_data
+\end{verbatim}
+plus replacing per-split z-score statistics with statistics computed on
+the training split alone. After this change the original ``Multi
+Baseline Neural Refinement'' code reproduces the honest numbers in
+Table~\ref{tab:judo} and Table~\ref{tab:self_collected}.
+
+\section{Full ablation tables on JuDo1000}
+\label{app:ablations}
+
+We report each axis individually. All runs are with the honest pipeline,
+seed $1047$, $200$ epochs of AdamW, batch size $64$, learning rate
+$3 \times 10^{-4}$.
+
+\subsection{Selection strategy}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+selection & test L2 (px) \\
+\midrule
+all 11 baselines        & 60.55 \\
+top-$M$=1               & 26.42 \\
+top-$M$=2               & 27.31 \\
+top-$M$=3               & 28.85 \\
+top-$M$=4 (paper)       & 30.46 \\
+top-$M$=6               & 36.11 \\
+top-$M$=8               & 41.07 \\
+oracle top-$M$=4 (test) & 31.94 \\
+oracle top-$M$=2 (test) & 28.04 \\
+\bottomrule
+\end{tabular}
+\caption{Top-$M$ selection sweep on JuDo1000. Smaller $M$ is better,
+because the worst classical baselines (TPS, RBF $s=0$) inject more
+noise than signal. None of the configurations beats the similarity
+baseline at $21.66$~px.}
+\end{table}
+
+\subsection{Noise injection $\sigma_{\max}$}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+$\sigma_{\max}$ (px) & test L2 (px) \\
+\midrule
+0  & 31.77 \\
+5  & 30.94 \\
+10 & 30.61 \\
+20 (paper) & 30.46 \\
+40 & 30.93 \\
+80 & 32.05 \\
+\bottomrule
+\end{tabular}
+\caption{Noise injection sweep. Effect is within $\pm 1$~px of the no-noise
+baseline.}
+\end{table}
+
+\subsection{Network capacity}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+hidden dims & test L2 (px) \\
+\midrule
+$[16]$              & 30.71 \\
+$[64]$              & 30.55 \\
+$[64, 32]$          & 30.42 \\
+$[64, 32, 16]$ (paper) & 30.46 \\
+$[256, 128]$        & 30.84 \\
+$[1024, 512]$ (released code) & 31.30 \\
+\bottomrule
+\end{tabular}
+\caption{Capacity sweep. All within $\pm 1$~px.}
+\end{table}
+
+\subsection{Drop-one baseline-pool}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+removed family & test L2 (px) \\
+\midrule
+none (all 11)              & 60.55 \\
+similarity                  & 65.21 \\
+poly                        & 64.13 \\
+RBF $s\in\{0,1,2\}$         & 35.92 \\
+TPS                         & 41.40 \\
+sim+RBF $s\in\{0,1,2\}$     & 38.05 \\
+sim+TPS                     & 43.21 \\
+sim+PWA                     & 42.78 \\
+\bottomrule
+\end{tabular}
+\caption{Drop-one ablation. Removing the bare RBF and TPS families
+substantially improves the honest neural variant because those baselines
+contribute high-variance, low-quality predictions.}
+\end{table}
+
+\subsection{Seed sensitivity}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+seed & test L2 (px) \\
+\midrule
+1047 & 30.46 \\
+7    & 31.13 \\
+42   & 30.79 \\
+123  & 30.65 \\
+2024 & 31.04 \\
+\bottomrule
+\end{tabular}
+\caption{Seed sweep. Mean $30.81$, std $0.27$~px across 5 seeds.}
+\end{table}
+
+\section{Per-subject heatmap}
+Figure~\ref{fig:heatmap} shows per-subject test L2 across all classical
+methods plus the learned shrinkage at $K{=}12$. Cells are coloured by
+$\Delta$ vs the per-subject sim+RBF anchor.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figA5_heatmap.pdf}
+\caption{Per-subject test L2 (px) across classical methods and our
+shrinkage at $K=12$. Color encodes $\Delta$ vs the per-subject
+sim+RBF anchor; greens indicate improvement.}
+\label{fig:heatmap}
+\end{figure}

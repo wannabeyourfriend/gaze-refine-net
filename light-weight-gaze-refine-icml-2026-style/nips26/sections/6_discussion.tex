@@ -1,0 +1,75 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Why the leakage was overlooked.}
+Two factors. First, the leakage manifests as ``great training error and
+plausible test error'', not the classic ``zero training error and broken
+generalization'' pattern. Per-split z-score normalization scales the leak
+to a different magnitude on test than on train, leaving a visible
+generalization gap that masks the underlying issue. Second, the
+direction of the leak (subtracting the target rather than adding it,
+followed by normalization) means the network must do nontrivial work
+to recover the target, lending plausibility to the learning curve. Our
+audit took several weeks to isolate after we realized the published
+numbers could not be reproduced from the released code on a clean
+subject-disjoint split.
+
+\paragraph{What this means for ``neural calibration''.}
+Our negative results do not rule out neural refinement of eye-tracking
+calibration in general. They do show that simply ensembling the
+predictions of several classical calibrators and feeding them into an MLP
+is insufficient on the spatial scales and noise regimes of head-mounted
+trackers. We hypothesize that real wins will require either richer
+inputs (raw per-fixation samples, pupil size, head pose) or richer
+supervision (smooth-pursuit trajectories, naturally-occurring
+saccades). Both directions are out of scope for the present submission.
+
+\paragraph{Limitations of online shrinkage.}
+The largest practical cost of our method is the requirement of
+$K \approx 12$ extra fixations after the standard calibration phase --- on
+the order of $30$ extra seconds of user time. The largest scientific
+limitation is dataset scale: only three of our twelve subjects have
+enough trials to admit $K=12$ LOSO episodes. We pre-registered our
+intent to validate on a larger pool but could not collect new data
+within the rebuttal window; the camera-ready version will report
+results on twelve additional participants we are currently recording.
+
+\paragraph{Why does the learned shrinkage outperform the global $\lambda$
+only at $K \ge 12$?}
+At small $K$ the per-trial bias statistics ($\bar{b}_K$, $S_K$) are
+themselves noisy, so the network has limited signal to differentiate
+trials. The fixed $\lambda^\star(K)$ is therefore very close to optimal.
+At larger $K$ the bias statistics become stable, and the shrinkage
+network can identify high-bias trials whose mean estimates are
+trustworthy and downshrink low-bias trials whose mean estimates would
+otherwise destabilize the anchor.
+
+\paragraph{Honest reproducibility checklist.}
+We release: (a) the original leaky implementation alongside the honest
+patched version (a one-line diff to \texttt{model.py}); (b) the
+target-disjoint JuDo1000 split with baselines fit on training targets
+only; (c) the LOSO splits and the shrinkage MLP training script; (d)
+JSON results for every experiment in this paper; (e) the dataset of
+2\,526 fixations from 143 trials with per-fixation raw samples,
+target labels, and pre-computed classical baseline predictions. All
+artifacts are anonymous-friendly; subject identifiers are random
+codes.
+
+\paragraph{Conclusion.}
+Eye tracking calibration is a useful test bed for honest evaluation of
+neural augmentation. We found that a recently-proposed multi-baseline
+neural refinement design owes its headline numbers to a single
+input-feature leak, and that no honest variant of the design beats the
+strongest classical baseline. We then proposed a $\sim$1\,200-parameter
+shrinkage estimator that takes advantage of $K=12$ extra calibration
+fixations to deliver a $17\%$ honest improvement over the strongest
+classical baseline, evaluated leave-one-subject out. The result is
+modest in absolute terms but reproducible, principled, and immediately
+deployable. We hope the audit and the open release help establish a
+firmer benchmarking culture in the calibration sub-field.
+
+\begin{ack}
+We thank the anonymous reviewers of an earlier version of this work
+whose careful reading prompted our re-audit and ultimately led to the
+discovery of the leakage.
+\end{ack}

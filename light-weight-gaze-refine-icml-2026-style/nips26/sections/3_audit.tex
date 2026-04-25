@@ -1,0 +1,93 @@
+\section{An audit of multi-baseline neural refinement}
+\label{sec:audit}
+
+We start by replicating the multi-baseline neural refinement (MBNR)
+pipeline of \citet{anon2026mbnr}. The pipeline has three stages.
+
+\paragraph{Stage I: per-trial classical calibrators.}
+For each trial, $K_b=7$ classical calibrators are fit on the
+$N_{\rm fit}$ calibration fixations: similarity, polynomial of orders
+$2,3,4$, RBF (multi-quadric, three smoothing levels), thin-plate
+spline, sim+RBF, sim+TPS, and sim+PWA. Each calibrator $g_b$ produces
+a per-fixation prediction $\hat{p}_{b,i} \in \mathbb{R}^2$.
+
+\paragraph{Stage II: top-$M$ baseline selection by calibration risk.}
+For each baseline $b$, the per-trial calibration risk is the mean L2
+error on the fitting fixations:
+\begin{equation}
+E_b = \frac{1}{N_{\rm fit}} \sum_{i=1}^{N_{\rm fit}}
+\| \hat{p}_{b,i} - p_i^\star \|_2.
+\end{equation}
+The $M=4$ baselines with smallest $E_b$ are retained.
+
+\paragraph{Stage III: neural refinement with noise injection.}
+A $[64, 32, 16]$ MLP with batch normalization and ReLU activations
+takes as input $[p, \hat{p}_1, \hat{p}_2, \hat{p}_3, \hat{p}_4]$ and
+outputs a 2-D residual $f_\theta(\cdot) \in \mathbb{R}^2$. The final
+prediction is $p + f_\theta(\cdot)$. During training, each input
+baseline coordinate is perturbed independently by additive Gaussian
+noise with $\sigma \sim U[0, \sigma_{\max}]$ pixels.
+
+\subsection{The leakage}
+
+The reference implementation%
+\footnote{\texttt{apps/neural\_refine/src/model.py} line~254 in the released
+codebase.}
+constructs the multi-baseline input feature as
+\begin{equation}
+\verb|baseline_residual = baseline_data - targets_px|.
+\label{eq:leak}
+\end{equation}
+That is, the network input is the baseline prediction \emph{minus the
+ground-truth target}. Subsequent z-score normalization is computed
+\emph{within each split} and partially conceals the magnitude, but the
+direction of the residual is preserved. The network can therefore
+recover the test target up to an affine transform that is itself derived
+from the test split's normalization statistics, so test L2 falls far
+below what an honest pipeline can achieve.
+
+\paragraph{Empirical confirmation.}
+On JuDo1000 (target-disjoint split, 33 train / 7 val / 8 test points),
+running the original code with~\eqref{eq:leak} yields a test mean L2 of
+$4.21$~px and matches the published $5.82$~px to within an early-stopping
+epoch. Replacing~\eqref{eq:leak} with the raw baseline prediction
+$\hat{p}_b$ and using \emph{training-set} z-score statistics for both
+val and test gives $30.5$~px --- worse than the $21.7$~px similarity
+baseline (Figure~\ref{fig:leakage}a). On the self-collected dataset the
+leak is less dramatic at test time because the per-split test
+statistics differ less between train and test than on JuDo, but the
+training-time advantage still drives the network to a final test L2 of
+$45.1$~px (Figure~\ref{fig:leakage}b), within $0.5$~px of the strongest
+classical baseline. In neither case does an honest MBNR improve on the
+strongest classical calibrator.
+
+\subsection{Variations explored}
+
+We tried six variations to recover any genuine ML signal from the design:
+(i) anchoring the residual head on the strongest baseline so that the
+network only learns the small leftover correction; (ii) replacing the
+freely-parameterized MLP head with a softmax blend over the baselines;
+(iii) adding sinusoidal features over the screen-normalized anchor
+position; (iv) selecting top-$M$ baselines via an honest validation-target
+ranking rather than the original training-point ranking (which trivially
+favours interpolators such as RBF with $s=0$); (v) per-trial
+leave-one-out Bayesian model averaging; (vi) a DeepSets context encoder
+that summarizes a few extra fixations into a per-trial vector and
+conditions the residual head on it. None reliably reduces test L2 below
+the strongest classical baseline; the closest call is the per-trial
+LOO-BMA, which beats sim+RBF by $0.9$~px ($2\%$) on the self-collected
+test set. The full result table is in Section~\ref{sec:experiments}.
+
+\subsection{Why MBNR cannot help (much) on these datasets}
+
+Two structural reasons prevent any MBNR variant from beating the
+strongest classical fit by a meaningful margin. First, on JuDo1000 the
+test-time error is dominated by per-fixation noise (per-fixation std
+$\approx 21$~px against a mean of $22$~px), so even an oracle that
+knows the per-trial bias only achieves modest reductions. Second, on
+both datasets the strongest classical baseline (similarity on JuDo,
+sim+RBF on the self-collected data) already absorbs the spatially
+smooth component of the calibration function; the remaining residual
+is nearly white noise around a non-zero per-trial mean. A neural
+ensemble of classical baselines cannot recover information that none
+of its inputs contain.

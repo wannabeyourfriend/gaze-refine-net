@@ -1,0 +1,99 @@
+\section{Introduction}
+\label{sec:intro}
+
+Eye tracking enables direct measurement of human visual attention and is
+widely used in robotics, augmented reality, transportation, healthcare,
+and gaming. Two hardware paradigms dominate. Screen-based trackers offer
+sub-degree accuracy at the cost of a fixed setup; head-mounted trackers
+(e.g.\ Pupil Labs Core) are more flexible but rely heavily on per-session
+calibration to map raw pupil estimates to screen coordinates. The
+calibration step thus determines the practical accuracy of any
+downstream task, from clinical assessment to interactive games.
+
+Classical calibration methods fit a parametric form (similarity transform,
+polynomial regression, radial basis function (RBF), or hybrid
+similarity-plus-RBF) to a small set of calibration fixations collected at
+the start of each session. These methods routinely achieve $0.6$--$1.3^\circ$
+on commodity head-mounted hardware, but their accuracy degrades when the
+calibration set is small, when head pose drifts during the session, or
+when corneal geometry varies across users. A recent line of work
+\emph{neural refinement} therefore proposes to combine the predictions of
+several classical baselines through a lightweight neural network, with
+the hope that the network learns to weigh them adaptively.
+
+\paragraph{What we found.}
+We set out to extend one such pipeline (originally targeting ICML 2026)
+and to address reviewer concerns about subject-disjoint evaluation. In
+the course of reproducing its headline numbers we discovered that the
+publicly available implementation contains a single line that subtracts
+the regression target from each baseline's input feature
+(\verb|mb_features = baseline_pred - target|). The network's input
+therefore contains the very quantity it is asked to predict. The
+per-split z-score normalization that the code applies on top conceals
+the leakage at test time but does not eliminate it; the network exploits
+the residual structure to drive training error very close to zero, and
+test error settles near a value that is dominated by the per-split
+normalization statistics rather than by genuine generalization. Removing
+this single line:
+\begin{itemize}
+\item changes the JuDo1000 headline from $5.8$~px to $30.5$~px
+  (which is \emph{worse} than the $21.7$~px similarity baseline),
+\item changes the self-collected dataset headline from $42.3$~px (claimed
+  $0.96^\circ$) to $\sim 45$~px (statistically indistinguishable from the
+  $45.5$~px sim+RBF baseline), and
+\item leaves the proposed design with no measurable advantage over a
+  carefully fit classical calibrator.
+\end{itemize}
+Figure~\ref{fig:leakage} summarizes the diagnosis.
+
+\paragraph{What works.}
+The same dataset analysis exposes a different opportunity. Per-trial
+biases of $25$--$60$~px are present and direction-stable
+(Figure~\ref{fig:dataset}c), suggesting that a brief
+\emph{online recalibration} after the standard calibration phase could
+identify and remove most of the residual error. Indeed, simply
+subtracting the empirical mean residual computed from $K=12$ extra
+fixations reduces mean L2 by $15\%$. However, the empirical mean is
+noisy at small $K$. We propose a tiny MLP ($\sim$1\,000 parameters) that
+takes per-trial bias statistics (mean magnitude, variance, $K$) and
+predicts a 2-D shrinkage factor $\lambda \in [0,1]^2$ to apply to the
+mean. Trained leave-one-subject-out across our twelve participants and
+evaluated on the held-out subject, the learned shrinkage estimator
+beats both the raw mean and a globally-tuned fixed $\lambda$ at every
+$K \geq 5$, achieving a $17\%$ reduction in mean L2 at $K=12$
+(Figure~\ref{fig:shrinkage}).
+
+\paragraph{Contributions.}
+\begin{itemize}
+\item \textbf{An audit of multi-baseline neural refinement} for
+  head-mounted eye tracking. We pinpoint a single-line input-feature
+  leak that drives the published gains, and we re-evaluate six neural
+  designs (anchored MLP residual, softmax-blend over baselines,
+  fourier-position-encoded MLP, DeepSets context encoder,
+  per-trial Bayesian model averaging, leakage-free top-$M$ selection)
+  under an honest protocol on two datasets. None reliably beats the
+  strongest classical baseline.
+\item \textbf{Honest per-trial shrinkage estimation.} A
+  $\sim$1\,000-parameter MLP that maps per-trial bias statistics to a
+  2-D shrinkage coefficient, trained leave-one-subject-out, delivers
+  a $17\%$ reduction in mean L2 over the sim+RBF anchor at $K=12$
+  context fixations.
+\item \textbf{Open release.} We release leakage-free reproducible
+  pipelines, target-disjoint JuDo1000 splits, leave-one-subject-out
+  protocol, and per-experiment results to facilitate honest
+  benchmarking of future neural calibration methods.
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig02_leakage.pdf}
+\caption{Honest evaluation eliminates the published headline numbers.
+We replace \texttt{mb\_features = baseline\_pred - target} with raw
+baseline predictions normalized by training-set statistics. (a) On
+JuDo1000, the honest pipeline yields $30.5$~px --- worse than the
+$21.7$~px similarity baseline. The leaky pipeline reproduces the
+published $5.8$~px. (b) On our 12-subject dataset the same bug inflates
+training-time signal; the honest neural method matches the strongest
+classical baseline rather than improving over it.}
+\label{fig:leakage}
+\end{figure}

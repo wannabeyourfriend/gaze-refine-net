@@ -218,3 +218,5 @@ data/raw/all/filtered_trials_summary_first_tenth.csv
 light-weight-gaze-refine-icml-2026-style/*
 # But DO track the research subfolder (analysis, experiments, scripts)
 !light-weight-gaze-refine-icml-2026-style/research/
+# And the new NeurIPS 2026 paper sources
+!light-weight-gaze-refine-icml-2026-style/nips26/
