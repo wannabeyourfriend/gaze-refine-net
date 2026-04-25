@@ -1,0 +1,122 @@
+[
+  {
+    "held": "Freddie",
+    "learned_K1": 65.09715953816077,
+    "learned_K2": 64.27650178004731,
+    "learned_K3": 72.94741505917047,
+    "learned_K5": 58.57740355523621,
+    "learned_K8": 68.61436565548199,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "Jane",
+    "learned_K1": 70.57689730364858,
+    "learned_K2": 66.26504843461076,
+    "learned_K3": 69.61350709404971,
+    "learned_K5": 76.48427990241073,
+    "learned_K8": 74.2036579505832,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "Joao",
+    "learned_K1": 71.57073852820817,
+    "learned_K2": 65.19671438865402,
+    "learned_K3": 60.79252018015365,
+    "learned_K5": 50.62483674619717,
+    "learned_K8": 27.209838042788267,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "Khushee Goel",
+    "learned_K1": 85.40019797295668,
+    "learned_K2": 84.11781990466997,
+    "learned_K3": 77.48813121683973,
+    "learned_K5": 57.204429246877396,
+    "learned_K8": 65.0074855741732,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "Liu Jiaqi",
+    "learned_K1": 39.54662325638036,
+    "learned_K2": 39.19605931074777,
+    "learned_K3": 38.2410926667551,
+    "learned_K5": 37.220992932742526,
+    "learned_K8": 35.74368760511014,
+    "learned_K12": 35.53195464324744,
+    "learned_K18": 34.25977503369787
+  },
+  {
+    "held": "TJ",
+    "learned_K1": 27.749370185872667,
+    "learned_K2": 30.48827614800311,
+    "learned_K3": 32.59496661249985,
+    "learned_K5": 31.939197808454477,
+    "learned_K8": 39.09132892400087,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "Tristan",
+    "learned_K1": 69.9379324040678,
+    "learned_K2": 68.0491879131252,
+    "learned_K3": 67.04182062890239,
+    "learned_K5": 67.5225379017058,
+    "learned_K8": 89.09583554090375,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "ZAnna",
+    "learned_K1": 46.0293611502831,
+    "learned_K2": 45.781340934861184,
+    "learned_K3": 45.00036353865324,
+    "learned_K5": 45.70527987396958,
+    "learned_K8": 44.98771539510238,
+    "learned_K12": 44.01978990511038,
+    "learned_K18": 42.69306946013182
+  },
+  {
+    "held": "Zander",
+    "learned_K1": 61.43981561647082,
+    "learned_K2": 58.21754505270167,
+    "learned_K3": 54.763844510030275,
+    "learned_K5": 54.05033084144266,
+    "learned_K8": 43.99075198995529,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "navya",
+    "learned_K1": 92.16751946312175,
+    "learned_K2": 76.21353741327434,
+    "learned_K3": 72.75080167021463,
+    "learned_K5": 53.976221630235706,
+    "learned_K8": 30.817464522319426,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "noor",
+    "learned_K1": 79.65142323356108,
+    "learned_K2": 67.2041779134342,
+    "learned_K3": 86.48364524278382,
+    "learned_K5": 82.40017536515855,
+    "learned_K8": 82.55119555136086,
+    "learned_K12": NaN,
+    "learned_K18": NaN
+  },
+  {
+    "held": "wzx",
+    "learned_K1": 57.352229335383306,
+    "learned_K2": 56.00428783154331,
+    "learned_K3": 57.75844700842199,
+    "learned_K5": 60.138183913406415,
+    "learned_K8": 48.283996248016095,
+    "learned_K12": 47.32957796512502,
+    "learned_K18": 43.649935852421706
+  }
+]
