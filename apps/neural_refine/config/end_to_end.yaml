@@ -1,0 +1,44 @@
+model:
+  type: "end_to_end"
+  input_dim: 2
+  hidden_dims: [512]
+  dropout: 0.0
+  coordinate_scale: 100.0
+
+
+training:
+  batch_size: 128
+  num_epochs: 110
+  learning_rate: 1e-4
+  optimizer: "adamw"
+  weight_decay: 1e-3
+  scheduler: "none"
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 1.0
+  regularization_weight: 0.0001
+
+data:
+  train_data_path: "../../data/prepared/split_avg_data/train.csv"
+  val_data_path: "../../data/prepared/split_avg_data/val.csv"
+  test_data_path: "../../data/prepared/split_avg_data/test.csv"
+  num_workers: 2
+  normalize: true
+  augmentation: false
+
+experiment:
+  name: "calibration-neural-refine"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

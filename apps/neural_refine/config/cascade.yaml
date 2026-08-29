@@ -1,0 +1,78 @@
+model:
+  type: "cascade"
+  input_dim: 4
+  hidden_dims: [1024]
+  dropout: 0.1
+  coordinate_scale: 2000.0  # inputs ~[0,2], residuals ~[-0.2, 0.2]
+  # New: normalization layer options
+  use_layer_norm: false  # Add LayerNorm after each hidden layer
+  use_batch_norm: false  # Add BatchNorm after each hidden layer (mutually exclusive with layer_norm)
+  activation: "relu"     # Activation function: relu, gelu, silu
+
+
+training:
+  batch_size: 16         # Reduced from 128 for more gradient updates per epoch
+  num_epochs: 200
+  learning_rate: 0.0001
+  optimizer: "adamw"
+  weight_decay: 0.001
+  scheduler: "none"
+  min_learning_rate: 0.000006
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/cascade_sim_rbf/"
+  # New: early stopping config
+  early_stopping:
+    enabled: false
+    patience: 100        # Stop if no improvement for N epochs
+    min_delta: 0.01      # Minimum improvement threshold (in pixels)
+    monitor: "l2_px"     # Metric to monitor: l2_px, val_loss, mae_x_px, etc.
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+  # New: sample weighting options
+  use_spread_weight: false  # Weight samples inversely by their spread (uncertainty)
+  spread_weight_scale: 1.0  # Scaling factor for spread-based weights
+
+data:
+  train_data_path: "../../data/prepared/split_avg_data/train.csv"
+  val_data_path: "../../data/prepared/split_avg_data/val.csv"
+  test_data_path: "../../data/prepared/split_avg_data/test.csv"
+  num_workers: 2
+  normalize: true
+
+  # SimRBF Perturbation Augmentation (KEY FEATURE)
+  # Simulates varying calibration quality by perturbing sim_rbf predictions.
+  # This teaches the network to:
+  # - Recognize calibration quality from (original_gaze, sim_rbf_gaze) relationship
+  # - Output appropriate residual corrections based on calibration quality
+  sim_rbf_perturbation:
+    enabled: true
+    noise_std: 20.0          # Gaussian noise std in pixels (SimRBF typical std ~20px)
+    bias_range: 30.0         # Uniform bias range in pixels (session bias ~20-30px)
+    prob: 0.5                # Probability of applying perturbation per sample
+
+  # General data augmentation config
+  augmentation:
+    enabled: false
+    # Gaussian noise on input coordinates
+    noise_std: 2.0           # Standard deviation in pixels
+    # Random translation
+    translate_range: 5.0     # Max translation in pixels (+/-)
+    # Random scaling
+    scale_range: [0.98, 1.02]  # Scale factor range
+
+experiment:
+  name: "calibration-neural-refine"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

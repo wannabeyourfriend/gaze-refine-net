@@ -1,0 +1,64 @@
+# User Identification Configuration
+
+data:
+  csv_path: "data/raw/all/all_trials_model_predictions_0111.csv"
+  min_sessions_per_user: 2  # Minimum sessions required for a user to be included
+  min_points_per_session: 10  # Minimum gaze points per session
+  test_ratio: 0.2  # Ratio of sessions for testing
+  val_ratio: 0.1  # Ratio of sessions for validation
+
+features:
+  # Which columns to use as input features
+  use_original_gaze: true
+  use_target: true
+  use_sim_rbf: true
+  use_spread: true
+  use_residuals: true  # Computed: target - prediction
+
+  # Feature engineering
+  compute_error_stats: true  # Mean, std of errors per session
+  compute_spatial_features: true  # Position-dependent patterns
+
+model:
+  # Point encoder: encodes individual gaze points
+  point_encoder:
+    input_dim: auto  # Computed from features
+    hidden_dims: [128, 64]
+    dropout: 0.1
+
+  # Session aggregator: aggregates point features to session embedding
+  aggregator:
+    type: "attention"  # Options: attention, mean, max
+    embedding_dim: 64
+    num_heads: 4
+
+  # Classifier head
+  classifier:
+    hidden_dims: [64, 32]
+    dropout: 0.2
+
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+
+  # Loss configuration
+  use_contrastive_loss: true
+  contrastive_weight: 0.5
+  contrastive_margin: 1.0
+  temperature: 0.1  # For InfoNCE loss
+
+  # Learning rate scheduler
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 5
+
+  # Early stopping
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+
+output:
+  checkpoint_dir: "apps/user_identify/outputs/checkpoints"
+  log_dir: "apps/user_identify/outputs/logs"

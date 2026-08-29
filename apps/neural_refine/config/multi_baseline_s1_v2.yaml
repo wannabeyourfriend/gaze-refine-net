@@ -1,0 +1,71 @@
+# Configuration for multi-baseline ensemble - alternative approach
+# Focus on learning spatial error patterns with positional encoding
+
+model:
+  type: "multi_baseline"
+  input_dim: 2
+  hidden_dims: [512, 256, 128]  # Deeper network
+  dropout: 0.15
+  coordinate_scale: 2000.0
+  activation: "relu"
+
+training:
+  batch_size: 64               # Larger batch for stability
+  num_epochs: 500
+  learning_rate: 0.0005        # Lower learning rate
+  optimizer: "adamw"
+  weight_decay: 0.01           # Stronger regularization
+  scheduler: "none"
+  min_learning_rate: 0.000001
+  grad_clip: 0.5               # Stricter gradient clipping
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/multi_baseline_s1_v2/"
+  early_stopping:
+    enabled: true
+    patience: 100
+    min_delta: 0.2
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/s1_for_training/train.csv"
+  val_data_path: "../../data/prepared/s1_for_training/val.csv"
+  test_data_path: "../../data/prepared/s1_for_training/test.csv"
+  num_workers: 2
+  normalize: true
+
+  sim_rbf_perturbation:
+    enabled: false
+
+  # Focus on most diverse baselines only
+  multi_baseline_features:
+    enabled: true
+    baselines:
+      - "sim_rbf_gaze"           # Best overall
+      - "pred_similarity"        # Most different from RBF
+      - "pred_poly"              # Polynomial fitting
+    normalize_features: true
+
+  # Disable calibration point features for now
+  high_freq_features:
+    enabled: false
+
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-multi-baseline-v2-selective"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

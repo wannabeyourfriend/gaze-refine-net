@@ -1,0 +1,73 @@
+# Configuration for large multi-baseline ensemble
+# Maximize parameter count while maintaining generalization
+
+model:
+  type: "multi_baseline"
+  input_dim: 2
+  hidden_dims: [2048, 1024, 512, 256]  # Much larger network
+  dropout: 0.2                          # Moderate dropout
+  coordinate_scale: 2000.0
+  activation: "relu"
+
+training:
+  batch_size: 64                        # Larger batch for stability
+  num_epochs: 1000                      # More epochs
+  learning_rate: 0.0005                 # Lower learning rate for large network
+  optimizer: "adamw"
+  weight_decay: 0.001                   # Light regularization
+  scheduler: "none"
+  min_learning_rate: 0.000001
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/multi_baseline_s1_large/"
+  early_stopping:
+    enabled: true
+    patience: 150                       # Very patient for large network
+    min_delta: 0.2                      # Sensitive to small improvements
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/s1_for_training/train.csv"
+  val_data_path: "../../data/prepared/s1_for_training/val.csv"
+  test_data_path: "../../data/prepared/s1_for_training/test.csv"
+  num_workers: 2
+  normalize: true
+
+  sim_rbf_perturbation:
+    enabled: false
+
+  multi_baseline_features:
+    enabled: true
+    baselines:
+      - "sim_rbf_gaze"
+      - "pred_sim_rbf_multiquadric_s0.0"
+      - "pred_sim_tps"
+      - "pred_sim_pwa"
+      - "pred_similarity"
+      - "pred_poly"
+      - "pred_tps"
+    normalize_features: true
+
+  high_freq_features:
+    enabled: false
+
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-multi-baseline-large"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

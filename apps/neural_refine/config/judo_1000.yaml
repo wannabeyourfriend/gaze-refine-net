@@ -1,0 +1,74 @@
+# Configuration for multi-baseline ensemble training on JuDo-1000 dataset
+# JuDo-1000: Large-scale gaze calibration dataset with ~9500 samples
+
+model:
+  type: "multi_baseline"
+  input_dim: 2
+  hidden_dims: [256, 128]  # Balanced network size for ~6700 training samples
+  dropout: 0.3              # Regularization to prevent overfitting
+  coordinate_scale: 100.0
+  activation: "relu"
+
+training:
+  batch_size: 32
+  num_epochs: 300
+  learning_rate: 0.0003      # Moderate learning rate
+  optimizer: "adamw"
+  weight_decay: 0.01        # L2 regularization
+  scheduler: "none"
+  min_learning_rate: 0.00001
+  grad_clip: 1.0
+  checkpoint_interval: 50
+  checkpoint_dir: "../../checkpoints/judo_1000/"
+  early_stopping:
+    enabled: true
+    patience: 50
+    min_delta: 0.5
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/judo_1000_split/train.csv"
+  val_data_path: "../../data/prepared/judo_1000_split/val.csv"
+  test_data_path: "../../data/prepared/judo_1000_split/test.csv"
+  num_workers: 2
+  normalize: true
+
+  sim_rbf_perturbation:
+    enabled: false
+
+  multi_baseline_features:
+    enabled: true
+    baselines:
+      - "pred_sim_rbf_multiquadric_s0.0"
+      - "pred_sim_tps"
+      - "pred_sim_pwa"
+      - "pred_similarity"
+      - "pred_poly"
+      - "pred_tps"
+      - "pred_sim_rbf_multiquadric_s1.0"
+      - "pred_sim_rbf_multiquadric_s2.0"
+    normalize_features: true
+
+  high_freq_features:
+    enabled: false
+
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "judo-1000-multi-baseline"
+  seed: 1047
+  use_wandb: true  # Enable wandb logging
+  wandb_project: "calibration-neural-refine-judo"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

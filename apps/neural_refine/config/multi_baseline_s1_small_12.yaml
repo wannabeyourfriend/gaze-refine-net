@@ -1,0 +1,73 @@
+# Configuration for multi-baseline ensemble training on S1 data
+# Smaller network + higher dropout to prevent lazy convergence
+
+model:
+  type: "multi_baseline"
+  input_dim: 2
+  hidden_dims: [256, 128]  # Smaller network to prevent overfitting
+  dropout: 0.3              # Higher dropout for better generalization
+  coordinate_scale: 100.0
+  activation: "relu"
+
+training:
+  batch_size: 32
+  num_epochs: 300
+  learning_rate: 0.0003      # Higher learning rate
+  optimizer: "adamw"
+  weight_decay: 0.01        # Stronger weight decay
+  scheduler: "none"
+  min_learning_rate: 0.00001
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/multi_baseline_s1_small_12/"
+  early_stopping:
+    enabled: true
+    patience: 50
+    min_delta: 0.5
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/all_trials_split/train.csv"
+  val_data_path: "../../data/prepared/all_trials_split/val.csv"
+  test_data_path: "../../data/prepared/all_trials_split/test.csv"
+  num_workers: 2
+  normalize: true
+  
+  sim_rbf_perturbation:
+    enabled: false
+
+  multi_baseline_features:
+    enabled: true
+    baselines:
+      - "sim_rbf_gaze"
+      - "pred_sim_rbf_multiquadric_s0.0"
+      - "pred_sim_tps"
+      - "pred_sim_pwa"
+      - "pred_similarity"
+      - "pred_poly"
+      - "pred_tps"
+    normalize_features: true
+
+  high_freq_features:
+    enabled: false
+
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-multi-baseline-small"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"

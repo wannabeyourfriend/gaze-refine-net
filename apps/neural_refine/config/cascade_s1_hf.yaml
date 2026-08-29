@@ -1,0 +1,80 @@
+# Configuration for training on S1 data with high-frequency calibration features
+# This config uses the s1_split dataset (subject_005 single-subject data)
+# with high-frequency calibration point features extracted from test_x_0..test_y_147
+
+model:
+  type: "cascade"  # Uses original_gaze + sim_rbf_gaze as base inputs
+  input_dim: 4      # Base input dimension (will be extended with HF features)
+  hidden_dims: [1024, 512]  # Deeper network to handle additional features
+  dropout: 0.15
+  coordinate_scale: 2000.0  # inputs ~[0,2], residuals ~[-0.2, 0.2]
+  activation: "relu"
+
+training:
+  batch_size: 32        # Increased batch size for more stable gradients
+  num_epochs: 300       # More epochs for convergence with more parameters
+  learning_rate: 0.0003 # Slightly higher LR for deeper network
+  optimizer: "adamw"
+  weight_decay: 0.001
+  scheduler: "none"
+  min_learning_rate: 0.00001
+  grad_clip: 1.0
+  checkpoint_interval: 100
+  checkpoint_dir: "../../checkpoints/cascade_s1_hf/"
+  early_stopping:
+    enabled: true
+    patience: 50        # Stop if no improvement for 50 epochs
+    min_delta: 0.5      # Minimum improvement threshold (in pixels)
+    monitor: "l2_px"
+
+loss:
+  mse_weight: 1.0
+  euclidean_weight: 0.0
+  regularization_weight: 0.0
+
+data:
+  train_data_path: "../../data/prepared/s1_for_training/train.csv"
+  val_data_path: "../../data/prepared/s1_for_training/val.csv"
+  test_data_path: "../../data/prepared/s1_for_training/test.csv"
+  num_workers: 2
+  normalize: true
+
+  # SimRBF Perturbation Augmentation
+  # Reduced intensity since we're using high-frequency features
+  sim_rbf_perturbation:
+    enabled: true
+    noise_std: 15.0          # Gaussian noise std in pixels
+    bias_range: 25.0         # Uniform bias range in pixels
+    prob: 0.4                # Slightly reduced probability
+
+  # High-Frequency Calibration Point Features
+  # Extracts features from test_x_0, test_y_0, ..., test_x_147, test_y_147
+  high_freq_features:
+    enabled: true
+    calibration_point_prefix: "test"  # Prefix for calibration columns
+
+    # Feature groups to include
+    include_statistical: true   # Mean, std, min, max, median, q1, q3, skew, kurtosis
+    include_spatial: true       # Bounding box, hull area, pairwise distances
+    include_quality: true       # Density, spread CV, symmetry metrics
+    include_relative: true      # Distance from gaze to calibration cluster
+
+    # Normalize features to zero mean, unit variance
+    normalize_features: true
+
+  # General data augmentation (disabled to avoid interfering with HF features)
+  augmentation:
+    enabled: false
+
+experiment:
+  name: "s1-cascade-highfreq"
+  seed: 1047
+  use_wandb: true
+  wandb_project: "calibration-neural-refine-s1"
+  wandb_entity: null
+  device: "cpu"
+
+evaluation:
+  save_predictions: true
+  visualize: false
+  output_dir: "../../outputs"
